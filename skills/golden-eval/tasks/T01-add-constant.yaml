@@ -1,0 +1,17 @@
+id: T01
+title: Add a constant to a config file
+input_prompt: |
+  In the file ./test_fixture/config.py, add a constant MAX_RETRIES = 3 just below
+  the existing TIMEOUT_SECONDS constant. Update the existing pytest test if needed.
+expected_behavior:
+  - file_modified: ./test_fixture/config.py
+  - constant_added: MAX_RETRIES = 3
+  - tests_pass: true
+metrics:
+  - cost_usd
+  - duration_seconds
+  - tools_used_count
+success_criteria:
+  - passed = true
+  - cost_usd <= baseline.cost_usd * 1.5
+  - duration_seconds <= baseline.duration_seconds * 2.0
