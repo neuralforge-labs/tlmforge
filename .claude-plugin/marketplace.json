@@ -13,11 +13,7 @@
         "name": "neuralforge-labs"
       },
       "category": "development",
-      "source": {
-        "source": "git",
-        "url": "https://github.com/neuralforge-labs/tlmforge.git",
-        "ref": "main"
-      },
+      "source": "./",
       "homepage": "https://github.com/neuralforge-labs/tlmforge"
     }
   ]
