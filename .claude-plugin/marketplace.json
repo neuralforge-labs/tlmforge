@@ -1,0 +1,24 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "tlmforge",
+  "description": "Personal plugin marketplace — production-grade feature development discipline for Claude Code",
+  "owner": {
+    "name": "neuralforge-labs"
+  },
+  "plugins": [
+    {
+      "name": "tlmforge",
+      "description": "Adversarial multi-agent review, mechanical convergence enforcement, structured JSON severity schema, threat-modeler + red-team-reviewer agents, and five companion skills.",
+      "author": {
+        "name": "neuralforge-labs"
+      },
+      "category": "development",
+      "source": {
+        "source": "git",
+        "url": "https://github.com/neuralforge-labs/tlmforge.git",
+        "ref": "main"
+      },
+      "homepage": "https://github.com/neuralforge-labs/tlmforge"
+    }
+  ]
+}
