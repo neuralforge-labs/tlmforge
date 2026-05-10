@@ -1,0 +1,93 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "review_schema.json",
+  "title": "Reviewer output for feature-development Stage 3 / Stage 5",
+  "description": "Locked at version 1.0 by phase-1 of gold-standard-pickup. The convergence rule is driven exclusively by per-finding severity. The top-level verdict is decorative and does not gate convergence.",
+  "type": "object",
+  "required": ["reviewer", "schema_version", "iteration", "verdict", "findings"],
+  "additionalProperties": false,
+  "properties": {
+    "reviewer": {
+      "type": "string",
+      "description": "Role identifier, e.g. architect, tester, code-reviewer, gemini."
+    },
+    "schema_version": {
+      "const": "1.0"
+    },
+    "iteration": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "status": {
+      "enum": ["ok", "skipped", "error"],
+      "default": "ok",
+      "description": "ok = real review; skipped = reviewer absent (e.g. Gemini key missing); error = reviewer attempted but failed (synthetic CRITICAL injected)."
+    },
+    "verdict": {
+      "enum": ["approve", "approve_with_warnings", "needs_revision", "do_not_ship"]
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["severity", "category", "file", "finding"],
+        "additionalProperties": false,
+        "properties": {
+          "severity": {
+            "enum": ["critical", "high", "medium", "low", "nit"]
+          },
+          "category": {
+            "enum": [
+              "security",
+              "auth",
+              "null_safety",
+              "bug",
+              "logic_error",
+              "race_condition",
+              "data_loss",
+              "missing_error_handling",
+              "test_coverage",
+              "tdd_violation",
+              "architecture",
+              "backwards_compat",
+              "performance",
+              "observability",
+              "documentation",
+              "style",
+              "meta"
+            ]
+          },
+          "file": {
+            "type": "string",
+            "description": "Path or 'architecture' for cross-cutting findings."
+          },
+          "line": {
+            "type": ["integer", "null"]
+          },
+          "finding": {
+            "type": "string",
+            "minLength": 8
+          },
+          "suggested_fix": {
+            "type": ["string", "null"]
+          },
+          "notes": {
+            "type": "string"
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "required": ["severity"],
+              "properties": {"severity": {"const": "critical"}}
+            },
+            "then": {
+              "required": ["suggested_fix"],
+              "properties": {"suggested_fix": {"type": "string", "minLength": 8}}
+            }
+          }
+        ]
+      }
+    }
+  }
+}
