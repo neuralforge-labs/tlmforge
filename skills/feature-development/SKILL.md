@@ -252,11 +252,11 @@ Opus's reasoning depth pays off. Iterative re-runs (when fixing specific finding
 use `model="sonnet"` to keep the loop fast; haiku misses subtleties throughout.
 
 ```
-Agent(subagent_type="architect-reviewer", model="opus", description="...", prompt=<full prompt>)
-Agent(subagent_type="tester",             model="opus", description="...", prompt=<full prompt>)
-Agent(subagent_type="tlmforge:threat-modeler", model="opus", description="...", prompt=<full prompt>)
-Agent(subagent_type="ux-reviewer",        model="opus", description="...", prompt=<full prompt>)   # only for UI changes
-Agent(subagent_type="general-purpose",    model="opus", description="...", prompt=<full prompt>)   # only for cross-cutting concerns
+Agent(subagent_type="tlmforge:architect-reviewer", model="opus", description="...", prompt=<full prompt>)
+Agent(subagent_type="tlmforge:tester",             model="opus", description="...", prompt=<full prompt>)
+Agent(subagent_type="tlmforge:threat-modeler",    model="opus", description="...", prompt=<full prompt>)
+Agent(subagent_type="tlmforge:ux-reviewer",        model="opus", description="...", prompt=<full prompt>)   # only for UI changes
+Agent(subagent_type="tlmforge:general-purpose",    model="opus", description="...", prompt=<full prompt>)   # only for cross-cutting concerns
 ```
 
 Default Stage 3 roster (3 reviewers — `architect-reviewer + tester + threat-modeler`):
@@ -562,9 +562,9 @@ tier-2 launches `red-team-reviewer` once on the converged diff) are in
 [`reviewer-convergence.md`](reviewer-convergence.md). Stage 5 default tier-1 launches:
 
 ```
-Agent(subagent_type="architect-reviewer", model="sonnet", ...)   # iterative re-run → sonnet (fast loop)
-Agent(subagent_type="code-reviewer",      model="sonnet", ...)
-Agent(subagent_type="tester",             model="sonnet", ...)
+Agent(subagent_type="tlmforge:architect-reviewer", model="sonnet", ...)   # iterative re-run → sonnet (fast loop)
+Agent(subagent_type="tlmforge:code-reviewer",      model="sonnet", ...)
+Agent(subagent_type="tlmforge:tester",             model="sonnet", ...)
 Bash(bash ~/.claude/skills/feature-development/ai_review_json.sh ...)   # key-absent → skipped, not an error
 ```
 
