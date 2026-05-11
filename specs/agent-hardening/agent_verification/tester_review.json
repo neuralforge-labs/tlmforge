@@ -1,0 +1,73 @@
+{
+  "reviewer": "tester",
+  "schema_version": "1.0",
+  "iteration": 1,
+  "status": "ok",
+  "verdict": "needs_revision",
+  "findings": [
+    {
+      "severity": "critical",
+      "category": "logic_error",
+      "file": "specs/agent-hardening/README.md",
+      "line": 57,
+      "finding": "Stage 4.6 per-phase re-review uses `git diff HEAD~1..HEAD` as the diff scope. Phases produce multiple commits (verify, evidence, summary are distinct commits per SKILL.md 4.2), so HEAD~1..HEAD reviews only the last commit (typically the summary doc) and misses the impl. Worse, if the previous commit was from another feature, HEAD~1..HEAD spans a feature boundary. The per-phase gate silently never finds CRITICALs.",
+      "suggested_fix": "Use a phase-start SHA anchor for the diff scope. Record the SHA at phase start in phase-N-state.md frontmatter (the `git_sha:` field already exists per reviewer-convergence.md section 9). Stage 4.6 must diff against <phase-N-start-sha>..HEAD, not HEAD~1..HEAD. Add an explicit phase-5-verify.md grep asserting the SKILL.md text does NOT contain `HEAD~1..HEAD`."
+    },
+    {
+      "severity": "critical",
+      "category": "missing_error_handling",
+      "file": "tlmforge/agents/tester.md",
+      "line": null,
+      "finding": "Phase 3 hardening tells tester to run `pytest --cov`. On non-Python projects, Python projects without pytest-cov, or when the runner crashes, the tester returns status=error which check_convergence.py treats as a synthetic CRITICAL (blocks convergence forever) or produces no JSON (reviewer_json_missing CRITICAL). The plan does not specify graceful degrade.",
+      "suggested_fix": "Phase 3 tester prompt must detect the runner from pyproject.toml/package.json/pubspec.yaml/go.mod and gracefully degrade: no runner -> status:ok with severity:medium finding; runner present but coverage tool missing -> status:ok with severity:low counts-only finding; only status:error if the suite itself crashes. Add phase-3-verify.md smoke tests for JS, Flutter, and Python-without-pytest-cov projects asserting status:ok in each."
+    },
+    {
+      "severity": "critical",
+      "category": "data_loss",
+      "file": "tlmforge/agents/code-reviewer.md",
+      "line": null,
+      "finding": "Phase 3 instructs code-reviewer and ux-reviewer to write artifacts to specs/<feature>/agent_verification/, but in Stop-hook mode there is no active feature directory. The plan does not define the fallback path. The agent may write to the wrong feature directory (corrupting audit trail), error on Write, or litter the repo root with code_review.md. Spec audit F8 names the issue but the README treats the fix as advisory.",
+      "suggested_fix": "Make the Stop-hook fallback normative in code-reviewer.md and ux-reviewer.md prompts: if env var TLMFORGE_FEATURE_DIR is set, write under specs/<feature>/agent_verification/; otherwise write under .tmp/<role>_review/<iso-timestamp>-<pid>.<md|json>. Detection must be deterministic, NOT a `most recent specs dir` heuristic. Same fallback for ux-reviewer. Add phase-3-verify.md smoke test invoking each agent with no feature context and asserting artifact location."
+    },
+    {
+      "severity": "high",
+      "category": "logic_error",
+      "file": "specs/agent-hardening/README.md",
+      "line": 114,
+      "finding": "Stage 1->2 conditional gate (`only gate if spec audit contains CRITICAL open questions needing human input`) relies on Claude self-classifying ambiguity. Misclassification is silent and unrecoverable: the user never sees a question that should have been asked, and the feature ships with the wrong decision encoded. Worst on auth/payment/PII paths.",
+      "suggested_fix": "Make the gate condition a hard structural check, not LLM judgment. Spec audit must use a tagged format `[GATE-BLOCKING]` vs `[INFORMATIONAL]` per question. Stage 1->2 fires if any question is `[GATE-BLOCKING]`. Add unconditional override: if spec audit mentions any TIER1 keyword (auth, payment, encryption, PII, migration, IAM, token, password), gate fires regardless of tags. Ship a unit-testable `should_stage1_gate(audit_text) -> bool` helper."
+    },
+    {
+      "severity": "high",
+      "category": "logic_error",
+      "file": "specs/agent-hardening/README.md",
+      "line": 116,
+      "finding": "Stage 2->3 gate `proceed if derived from user-approved upstream plan` has no on-disk marker. Claude self-asserts `the user approved this earlier` with no audit trail. Same drift risk as the Stage 1 gate, with no way to verify after the fact.",
+      "suggested_fix": "Require an on-disk artifact specs/<feature>/UPSTREAM_APPROVAL.md with frontmatter containing source (ExitPlanMode hash, chat-turn id, or prior PR URL) and the user's literal approval phrase. If absent, the gate fires. Verifiable, not asserted. Add a phase-5-verify.md grep for UPSTREAM_APPROVAL.md in SKILL.md Stage 2 text."
+    },
+    {
+      "severity": "high",
+      "category": "bug",
+      "file": "specs/agent-hardening/README.md",
+      "line": 80,
+      "finding": "Phase 1 scope is too narrow. `plans/<feature>/...` references also exist in skills/live-evaluator/SKILL.md (4 hits) and skills/property-test-generator/SKILL.md (3 hits). They are not `agent_verification/` paths so the current grep test misses them, but they break the same convention (CLAUDE.md mandates specs/, not plans/). After the hardening ships, composed skills will still write reports to nonexistent or wrong directories.",
+      "suggested_fix": "Expand Phase 1 to also fix skills/live-evaluator/SKILL.md and skills/property-test-generator/SKILL.md. Tighten phase-1-verify.md grep: `grep -rn plans/<feature> tlmforge/skills tlmforge/agents | grep -v plans/encryption | grep -v dotfiles/claude/plans` returns 0. Explicitly document carve-outs for historical references in skills/feature-development/REVIEW.md and reviewer-convergence.md line 313 (legacy filesystem path)."
+    },
+    {
+      "severity": "medium",
+      "category": "logic_error",
+      "file": "specs/agent-hardening/README.md",
+      "line": 154,
+      "finding": "Stage 4.6 blocks on CRITICAL+HIGH but tester/code-reviewer routinely emit HIGH findings about missing tests for code that will be implemented in a LATER phase (e.g. `no API tests` at end of phase that only built the schema). The block becomes a false positive that forces the user to either suppress findings (audit-trail corruption) or write throwaway tests.",
+      "suggested_fix": "Phase 3 hardening of tester.md and code-reviewer.md must include per-phase-mode scoping: when invoked in Stage 4.6, report only on code WITHIN the phase diff. Cross-phase gaps (tests for code that does not yet exist) must be severity:low with category:meta, not HIGH. Add phase-3-verify.md grep for `per-phase mode` and `WITHIN the phase diff` in both prompts."
+    },
+    {
+      "severity": "medium",
+      "category": "race_condition",
+      "file": "tlmforge/agents/code-reviewer.md",
+      "line": null,
+      "finding": "Concurrent Stop-hook invocations (user edits file A, edits file B before first hook returns) target the same code_review.md path. Write overwrites. Findings from the first invocation are lost. Convergence/downstream consumers read whichever finished last.",
+      "suggested_fix": "Phase 3 prompt for code-reviewer (and ux-reviewer) must use atomic-write (write .tmp then mv, per reviewer-convergence.md section 6) AND a timestamp+PID suffix for Stop-hook artifacts: .tmp/<role>_review/<iso-timestamp>-<pid>.md. Consumers read by mtime. Add phase-3-verify.md grep for atomic-write and timestamped path."
+    }
+  ]
+}
