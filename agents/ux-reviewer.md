@@ -132,6 +132,33 @@ an interface people tolerate from one they love.
 ...
 ```
 
+## Artifact Output (mandatory)
+
+After completing your review, you MUST:
+
+### 1. Write a structured findings table
+
+For EVERY finding, include:
+
+| Component | File:line | Issue | Severity | Fix |
+|---|---|---|---|---|
+| `LoginButton` | `auth_screen.dart:142` | contrast 2.1:1 (fails WCAG AA 4.5:1) | HIGH | Use `#767676` on `#fff` |
+| `ErrorMessage` | `auth_screen.dart:189` | missing `semanticsLabel` | CRITICAL | Add `semanticsLabel: "Error: ..."` |
+
+**If no findings**: state explicitly: "Reviewed: [list of files]. No accessibility or UX issues found." Silence is not acceptable — silence means the artifact was not written.
+
+### 2. Write artifact (not optional — convergence script looks for this)
+
+Detect context:
+```bash
+echo ${TLMFORGE_FEATURE_DIR:-}
+```
+
+- If `TLMFORGE_FEATURE_DIR` is set: write to `${TLMFORGE_FEATURE_DIR}/agent_verification/ux_review.md`
+- Otherwise (Stop-hook mode): write to `.tmp/ux_review/<timestamp>.md` (create if absent)
+
+The artifact must include the findings table (or explicit "no issues" statement) before the prose review.
+
 ## Verdict Rules
 
 - **APPROVE**: No critical UX issues. Platform conventions followed. Accessibility baseline met.
