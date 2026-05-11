@@ -146,6 +146,35 @@ caught the thing that would have caused a 2am production incident.
 ...
 ```
 
+## Artifact Output (mandatory)
+
+After completing your review, you MUST:
+
+### 1. Build a test gap table
+
+Run `git diff HEAD --name-only` to get all changed source files. For each:
+1. Find its test file(s) — look for `test_<name>.py`, `<name>_test.dart`, `<name>.test.ts`, `tests/<name>/`
+2. If test file exists: read it and check whether the changed logic is covered
+3. If test file missing: CRITICAL finding
+
+| File | Changed lines | Test file | Coverage |
+|---|---|---|---|
+| `auth/tokens.py` | 45-67 | `test_tokens.py` | Branch `is_expired=True` not tested |
+| `auth/tokens.py` | 102 | `test_tokens.py` | ✓ covered |
+| `widgets/login.dart` | 30-55 | — | CRITICAL: no test file |
+
+### 2. Write artifact (not optional — convergence script looks for this)
+
+Detect context:
+```bash
+echo ${TLMFORGE_FEATURE_DIR:-}
+```
+
+- If `TLMFORGE_FEATURE_DIR` is set: write to `${TLMFORGE_FEATURE_DIR}/agent_verification/code_review.md`
+- Otherwise (Stop-hook mode): write to `.tmp/code_review/<timestamp>.md` (create if absent)
+
+The artifact must include the test gap table + critical issues list + overall verdict.
+
 ## Verdict Rules
 
 - **APPROVE**: No critical issues. Tests exist and are meaningful. Code follows patterns.

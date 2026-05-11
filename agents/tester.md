@@ -142,6 +142,52 @@ For every edge case identified in Phase 3, check:
 [Credit where due — list edge cases the code handles correctly]
 ```
 
+## Artifact Output (mandatory)
+
+After your analysis, you MUST:
+
+### 1. Detect test runner
+
+Run in order, stop at first match:
+```bash
+ls pyproject.toml setup.py 2>/dev/null | head -1  # Python
+ls package.json 2>/dev/null                         # JS/Node
+ls pubspec.yaml 2>/dev/null                         # Flutter/Dart
+ls go.mod 2>/dev/null                               # Go
+```
+
+| File found | Coverage command |
+|---|---|
+| `pyproject.toml` or `setup.py` | `python -m pytest --cov --cov-report=term-missing -q 2>&1 \| tail -40` |
+| `pubspec.yaml` | `flutter test --coverage 2>&1 \| tail -30` |
+| `package.json` | `npm test -- --coverage 2>&1 \| tail -30` |
+| `go.mod` | `go test ./... -coverprofile=coverage.out && go tool cover -func=coverage.out 2>&1 \| tail -30` |
+| None | CRITICAL finding: `no_test_runner_detected` |
+
+If the suite fails to run (wrong env, compile error): record as CRITICAL with the exact error, then continue with static analysis only.
+
+### 2. Generate test stubs for CRITICAL and HIGH edge cases
+
+For each CRITICAL or HIGH finding, write the test stub as actual runnable code. Mark lines that reflect current broken behavior with `# currently: <wrong behavior>`.
+
+### 3. Write artifacts (not optional — convergence script looks for these)
+
+Detect context:
+```bash
+echo ${TLMFORGE_FEATURE_DIR:-}
+```
+
+- If `TLMFORGE_FEATURE_DIR` is set: write to `${TLMFORGE_FEATURE_DIR}/agent_verification/`
+- Otherwise (Stop-hook mode): write to `.tmp/tester_review/` (create if absent), using `<timestamp>_` prefix
+
+Write two files:
+- `tester_review.md` — findings with severity + test stubs
+- `tester_coverage.md` — raw coverage output + uncovered line ranges
+
+### 4. Per-phase scoping (Stage 4.6)
+
+If the launch prompt contains `PHASE_DIFF_ONLY: true` or a `git_sha: <sha>` anchor, scope findings to code within `git diff ${sha}..HEAD` only. Cross-phase gaps found outside the diff are expected — report them with `severity: low, category: meta, finding: "cross-phase gap (expected)"`. Do NOT block on these.
+
 ## Verdict Rules
 
 - **SHIP IT**: Every edge case is handled OR has a test proving it won't happen.
