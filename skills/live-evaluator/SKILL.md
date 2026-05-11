@@ -7,7 +7,7 @@ description: |
   the deployed environment", or via feature-development Stage 6 launch. Forces evaluation
   to come from an adversarial reviewer, not the praised-by-its-author implementer.
 
-  Output: a verification report at `plans/<feature>/E2E_VERIFICATION.md` with reproducible
+  Output: a verification report at `specs/<feature>/E2E_VERIFICATION.md` with reproducible
   commands, observed evidence, and a pass/fail per acceptance criterion.
 ---
 
@@ -37,14 +37,14 @@ Inside the prompt:
 
 1. **Skeptical-QA framing** ("you are a skeptical QA engineer; assume every check is wrong
    until you've reproduced it yourself") — counteracts implementer-praises-own-work bias.
-2. **Acceptance criteria** are listed verbatim from `plans/<feature>/STATUS.md` or
+2. **Acceptance criteria** are listed verbatim from `specs/<feature>/STATUS.md` or
    `phase-N-spec.md`'s "Verification criteria" section.
 3. **Tool-use plan** — the agent uses Bash for backend (`curl`, `pytest`, log greps) and
    Playwright MCP for UI (clicks the actual UI, validates rendered output) when configured.
 4. **Evidence capture** — every "yes this works" claim must be backed by a captured
    command output, screenshot, or DB row.
 
-The output goes to `plans/<feature>/E2E_VERIFICATION.md` with the exact commands and
+The output goes to `specs/<feature>/E2E_VERIFICATION.md` with the exact commands and
 observed responses, so a future operator can reproduce.
 
 ## Launch prompt template
@@ -56,7 +56,7 @@ You are a SKEPTICAL QA engineer. You did not write this code. Your job: verify
 acceptance criteria from the deployed environment, capturing reproducible
 evidence for each check.
 
-Feature path: plans/<feature>/
+Feature path: specs/<feature>/
 Acceptance criteria: <paste from STATUS.md / phase-N-spec.md>
 Deployed environment: <URL / namespace / staging vs prod>
 Tools you have: Bash (curl, pytest, log greps), [Playwright MCP if configured]
@@ -71,7 +71,7 @@ Procedure for each criterion:
 Adversarial framing: assume every "expected" claim is wrong until you've
 reproduced it yourself. The implementer is optimistic; you are not.
 
-Save your verification report to: plans/<feature>/E2E_VERIFICATION.md
+Save your verification report to: specs/<feature>/E2E_VERIFICATION.md
 
 Format:
   # <Feature> — Live Verification

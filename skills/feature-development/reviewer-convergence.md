@@ -145,7 +145,7 @@ The Stage 3 / Stage 5 launch prompt template gains the following block. Place it
 
 In addition to your prose markdown report, you MUST use the Write tool to
 create a second file:
-  plans/<feature>/agent_verification/<your_role>_review.json
+  specs/<feature>/agent_verification/<your_role>_review.json
 
 This JSON file must validate against the schema below (copy exactly):
 
@@ -171,7 +171,7 @@ your slot. This blocks convergence and triggers a re-launch.
 
 Implemented in `~/.claude/skills/feature-development/check_convergence.py` (delivered in phase-1b of gold-standard-pickup). The rule, in plain language:
 
-1. Collect all `<role>_review.json` files in `plans/<feature>/agent_verification/` for the current iteration.
+1. Collect all `<role>_review.json` files in `specs/<feature>/agent_verification/` for the current iteration.
 2. For each role expected by the current stage (see §0 for the per-stage table — Stage 3 default: architect-reviewer + tester + threat-modeler; Stage 5 tier-1 default: architect-reviewer + code-reviewer + tester + gemini-if-present; Stage 5 tier-2: red-team-reviewer): if the JSON file is missing, inject a synthetic finding `severity=critical, category=meta, finding=reviewer_json_missing` for that role.
 3. For each reviewer with `status: "ok"` or `status: "error"`: count `severity=="critical"` findings.
 4. **Real CRITICAL count** = sum of `critical` findings with `category != "meta"`.
@@ -233,7 +233,7 @@ When invoking `ai_review_json.sh` from Stage 5, use:
 ```
 Bash(
   command="bash ~/.claude/skills/feature-development/ai_review_json.sh \
-    --output plans/<feature>/agent_verification/gemini_review.json \
+    --output specs/<feature>/agent_verification/gemini_review.json \
     --iteration <N> > .tmp/gemini_review/<timestamp>.log 2>&1",
   run_in_background=true,
   timeout=35000
@@ -271,7 +271,7 @@ regardless of chat-reply size.
 
 Stage 4 phases are long; by phase N's end, the implementer's context is full
 of impl narrative that biases the Stage 5 reviewer. To enable a cold-start
-Stage 5, each Stage 4 phase writes `plans/<feature>/phase-N-state.md`.
+Stage 5, each Stage 4 phase writes `specs/<feature>/phase-N-state.md`.
 
 **Format (atomic-write per §6 — write to `phase-N-state.md.tmp`, then `mv`):**
 
