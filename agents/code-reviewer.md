@@ -10,7 +10,7 @@ description: >
   Used in: feature-development skill Stage 5 (re-review on the diff after impl lands), and
   the Stop hook on file changes. Deliberately NOT launched at Stage 3 of feature-development
   — there is no code at plan time, so its strengths are wasted there.
-tools: Read, Grep, Glob, Bash
+tools: Read, Grep, Glob, Bash, Write, Edit
 model: sonnet
 ---
 

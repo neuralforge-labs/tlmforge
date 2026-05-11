@@ -6,7 +6,7 @@ description: >
   appealing, smart, and intuitive interfaces at Google, Apple, and Amazon. Reviews layouts,
   interaction patterns, accessibility, visual hierarchy, responsiveness, and platform
   conventions. Use proactively after building or modifying any user-facing screens.
-tools: Read, Grep, Glob, Bash, WebSearch, WebFetch
+tools: Read, Grep, Glob, Bash, Write, Edit, WebSearch, WebFetch
 model: sonnet
 ---
 
