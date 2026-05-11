@@ -131,10 +131,10 @@ medium or low, NOT critical.
 
 Produce TWO files using the Write tool:
 
-1. **Markdown report** at `plans/<feature>/agent_verification/threat_modeler_review.md`
+1. **Markdown report** at `specs/<feature>/agent_verification/threat_modeler_review.md`
    — your prose review with each finding's narrative
 
-2. **JSON sidecar** at `plans/<feature>/agent_verification/threat_modeler_review.json`
+2. **JSON sidecar** at `specs/<feature>/agent_verification/threat_modeler_review.json`
    validating against `~/.claude/skills/feature-development/review_schema.json`. Use:
    - `reviewer: "threat-modeler"`
    - `schema_version: "1.0"`

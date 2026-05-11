@@ -182,8 +182,8 @@ A noisy red-team-reviewer is worse than no red-team-reviewer.
 
 Produce TWO files using the Write tool:
 
-1. **Markdown report** at `plans/<feature>/agent_verification/red_team_review.md`
-2. **JSON sidecar** at `plans/<feature>/agent_verification/red_team_review.json` validating
+1. **Markdown report** at `specs/<feature>/agent_verification/red_team_review.md`
+2. **JSON sidecar** at `specs/<feature>/agent_verification/red_team_review.json` validating
    against `~/.claude/skills/feature-development/review_schema.json`:
    - `reviewer: "red-team-reviewer"`
    - `schema_version: "1.0"`
