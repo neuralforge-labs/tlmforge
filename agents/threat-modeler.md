@@ -8,7 +8,7 @@ description: >
   injection surfaces, channel-confidentiality assumptions. Distinct from architect-reviewer
   (which asks "would a senior ship this?") and from red-team-reviewer (which reviews the
   concrete diff at Stage 5 for IDOR/TOCTOU/etc).
-tools: Read, Grep, Glob
+tools: Read, Grep, Glob, Bash, Write, Edit
 model: sonnet
 ---
 
