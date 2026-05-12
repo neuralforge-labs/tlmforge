@@ -56,7 +56,7 @@ this skill takes over from Stage 1.
 ## The recipe at a glance
 
 ```
-Stage 1: Request audit (main Claude)         →  specs/<f>/spec_audit.md
+Stage 1: Feature request analysis (main)     →  specs/<f>/spec_audit.md
          ↓  conditional gate (only if ANY [GATE-BLOCKING] open question)
 Stage 2: Master plan (main Claude)           →  specs/<f>/README.md
          ↓  conditional gate (only if plan introduces unapproved decisions)
@@ -94,18 +94,19 @@ phase-end, Stage 5 final).
 
 ---
 
-## Stage 1 — Request audit (produces `spec_audit.md`)
+## Stage 1 — Feature request analysis (produces `spec_audit.md`)
 
-**Goal:** Audit the **user's request** — treat that request AS the
-incoming spec — and surface every hidden assumption, threat, performance
+**Goal:** Analyze the user's **feature request** — vague or precise,
+doesn't matter — and surface every hidden assumption, threat, performance
 concern, edge case, and irreversible step in it BEFORE investing in a
 design.
 
-The output IS the structured spec. "Spec audit" is forward-looking — the
-artifact being produced (`spec_audit.md`) is the audit of the user's
-stated intent. There is no pre-existing spec document being reviewed at
-this stage; Stage 1 is the act of turning a vague-or-precise human
-request into a structured artifact with surfaced unknowns.
+The output is a structured spec built by analyzing the request. There is
+no pre-existing spec document at this stage; Stage 1 is the act of
+turning a human-stated feature request into a structured artifact with
+explicitly tagged open questions and surfaced unknowns. The artifact
+filename `spec_audit.md` is forward-looking — the analysis IS the spec
+audit.
 
 This is the **single most valuable artifact**. The encryption README's
 F1-F16 audit is what made everything that followed solid.
