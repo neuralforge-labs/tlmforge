@@ -6,7 +6,7 @@ description: >
   at a top-tier tech company (Google L8+ / Meta E8+). Use proactively after creating plans,
   before major implementations, and after significant code changes. Catches common AI coding
   mistakes, over-engineering, hallucinated APIs, and instruction drift.
-tools: Read, Grep, Glob, Bash, WebSearch
+tools: Read, Grep, Glob, Bash, Write, Edit, WebSearch
 model: sonnet
 ---
 
