@@ -1,0 +1,19 @@
+{
+  "reviewer": "threat-modeler",
+  "schema_version": "1.0",
+  "iteration": 3,
+  "status": "ok",
+  "verdict": "approve",
+  "_note": "JSON returned inline (still no Write tool in running session per DF3). Saved by main Claude.",
+  "findings": [
+    {"severity": "nit", "category": "architecture", "file": "architecture", "line": null,
+     "finding": "TH1 FIXED: load_final_audit_jsons now explicitly passes expected_iteration=1; _load_json_safely treats None as invalid. Stage 5 cross-check gap closed.",
+     "suggested_fix": null},
+    {"severity": "nit", "category": "architecture", "file": "architecture", "line": null,
+     "finding": "TH5 FIXED: All 5 sections consistent on REMOVE / ImportError / no shim. Remaining two_tier references are appropriate Phase 0 characterization + Phase 3 removal-test context.",
+     "suggested_fix": null},
+    {"severity": "nit", "category": "security", "file": "architecture", "line": null,
+     "finding": "NEW-1 FIXED: Threat model section rewritten — defenses + non-defenses align with Phase 1 implementation.",
+     "suggested_fix": null}
+  ]
+}

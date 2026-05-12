@@ -1,0 +1,57 @@
+{
+  "reviewer": "architect-reviewer",
+  "schema_version": "1.0",
+  "iteration": 1,
+  "status": "ok",
+  "verdict": "needs_revision",
+  "findings": [
+    {
+      "severity": "critical",
+      "category": "bug",
+      "file": "tlmforge/skills/feature-development/check_convergence.py",
+      "line": 135,
+      "finding": "Cap-check inconsistency between evaluate_convergence (uses `iteration > max_iterations`, line 135) and evaluate_stage5_two_tier (uses `iteration >= max_iterations`, line 364). Phase 0 characterization tests do not call out this discrepancy, so it will be silently inherited rather than pinned and resolved before Phase 3 rewrites evaluate_stage5_two_tier's semantics into evaluate_stage5_dual.",
+      "suggested_fix": "Add a Phase 0 test `test_cap_semantics_consistency` that asserts both functions' cap boundary explicitly (iteration=3 vs iteration=4 with max_iterations=3). Document in Phase 3 which semantics evaluate_stage5_dual will follow (`>` or `>=`) and update that decision in the plan before implementation begins. The Phase 0 test description must note: 'evaluate_stage5_two_tier uses >= while evaluate_convergence uses > — pin both, resolve in Phase 3.'"
+    },
+    {
+      "severity": "critical",
+      "category": "documentation",
+      "file": "tlmforge/skills/feature-development/reviewer-convergence.md",
+      "line": 218,
+      "finding": "reviewer-convergence.md §3 item 1 still reads 'Collect all <role>_review.json files in specs/<feature>/agent_verification/' (0.4.0 flat path). §3 item 2 still names 'Stage 5 tier-1: architect-reviewer + code-reviewer + tester + gemini-if-present; tier-2: red-team-reviewer' (0.4.0 two-tier model). The plan scopes the doc update to §0 and §4 only, leaving §3 body text contradicting §0's 0.5.0 content. Agents reading this as prompt context will get conflicting instructions.",
+      "suggested_fix": "Expand the Phase 3 'Files modified: reviewer-convergence.md' scope to include §3 items 1 and 2. Update item 1 to describe the new loaders as the canonical loading interface. Update item 2 to remove the tier-1/tier-2 language and reflect the single-shot dual model (red-team-reviewer + architect-reviewer)."
+    },
+    {
+      "severity": "high",
+      "category": "backwards_compat",
+      "file": "tlmforge/skills/feature-development/check_convergence.py",
+      "line": 240,
+      "finding": "The back-compat shim for evaluate_stage5_two_tier silently discards tier-1 CRITICALs from non-architect reviewers (code-reviewer, tester). If tier1_jsons has no architect-reviewer key, the shim passes None as architect_json to evaluate_stage5_dual, injecting a synthetic CRITICAL that did not exist in the original call. This is a behavioral regression — callers using the deprecated path with a code-reviewer CRITICAL in tier1_jsons would see convergence where the original function returned not-converged.",
+      "suggested_fix": "Either (a) aggregate all tier-1 CRITICALs from all roles in tier1_jsons before delegating (e.g., fold them into a synthetic combined review that represents 'tier-1 total'), or (b) document explicitly in the Phase 3 plan that the shim is best-effort and any caller with real tier-1 CRITICAL in non-architect roles must migrate before the grace period ends. Add test coverage for the case where tier1_jsons has a CRITICAL from code-reviewer but no architect-reviewer key."
+    },
+    {
+      "severity": "high",
+      "category": "architecture",
+      "file": "tlmforge/skills/feature-development/check_convergence.py",
+      "line": null,
+      "finding": "evaluate_stage5_dual return shape is not specified in the plan. The plan says 'same shape conventions as the iterative ones' but the function takes 2 named parameters (not a reviewer_jsons dict) so it cannot trivially return findings_by_role, real_critical_count, meta_critical_count without either duplicating CRITICAL-counting logic or delegating to evaluate_convergence internally. Without a concrete return shape, the Phase 3 tests cannot be written unambiguously.",
+      "suggested_fix": "Add a concrete return-shape spec to Phase 3. The cleanest option: evaluate_stage5_dual delegates to evaluate_convergence internally by constructing reviewer_jsons = {'red-team-reviewer': red_team_json, 'architect-reviewer': architect_json} and calling evaluate_convergence with iteration=1, max_iterations=1, then maps action to 'ship' (if converged) or 'escalate' (if not). This reuses all tested logic with zero duplication. Document this delegation pattern explicitly in the plan."
+    },
+    {
+      "severity": "medium",
+      "category": "tdd_violation",
+      "file": "tlmforge/skills/feature-development/tests/test_check_convergence.py",
+      "line": null,
+      "finding": "Phase 0 verification criterion is self-contradicting: it states both 'All ~15 tests pass on initial run against unmodified check_convergence.py' AND 'Tests RED before existing code is touched.' Characterization tests by definition should be GREEN immediately against current code. Enforcing RED-first on them is impossible and creates confusion about whether the plan expects TDD RED-first or characterization-green behavior.",
+      "suggested_fix": "Clarify in Phase 0 that characterization tests are expected GREEN immediately (they pin existing behavior, not new behavior). Reserve the RED-first requirement for Phase 1+ tests that test NEW functionality before implementation. Update the verification criteria to say: 'Phase 0 tests: GREEN on first run against unmodified code. Phase 1+ tests: RED before impl, GREEN after.'"
+    },
+    {
+      "severity": "medium",
+      "category": "documentation",
+      "file": "tlmforge/skills/feature-development/tests/test_check_convergence.py",
+      "line": null,
+      "finding": "test_integration_stage3_round_2_with_carryover specifies action='retry' OR 'escalate if iteration counter says cap' — the ambiguity means the implementer picks arbitrarily. No iteration/max_iterations values are specified for this integration test.",
+      "suggested_fix": "Specify concrete parameters: iteration=2, max_iterations=3 → expected action='retry'. Add a second variant with iteration=4, max_iterations=3 → expected action='escalate'. Remove the ambiguous 'or' from the test description."
+    }
+  ]
+}

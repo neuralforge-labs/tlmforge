@@ -1,0 +1,33 @@
+{
+  "reviewer": "architect-reviewer",
+  "schema_version": "1.0",
+  "iteration": 2,
+  "status": "ok",
+  "verdict": "needs_revision",
+  "findings": [
+    {
+      "severity": "critical",
+      "category": "architecture",
+      "file": "tlmforge/specs/check-convergence-round-aware/README.md",
+      "line": 38,
+      "finding": "Three-way internal contradiction about evaluate_stage5_two_tier: Scope section (line 38-39) says 'Mark as deprecated (raises DeprecationWarning)', Decisions Made (lines 444-448) says 'Deprecated calls dual internally', and final verification criteria (line 503) says 'evaluate_stage5_two_tier emits DeprecationWarning on call' — all three directly contradict Phase 3's decision to REMOVE the function. TDD plan table (line 489) also says 'deprecation warning.' An implementer reading top-to-bottom gets four contradictory instructions. This makes the plan unexecutable as written.",
+      "suggested_fix": "Update all four contradicting locations to match Phase 3's REMOVE decision: (1) Scope line 38-39: change 'Mark as deprecated (raises DeprecationWarning...)' to 'Remove evaluate_stage5_two_tier entirely (no shim)'; (2) Decisions Made lines 444-448: replace the deprecated-calls-dual paragraph with 'Remove, don't deprecate. No suppressible DeprecationWarning.'; (3) Final verification criteria line 503: change to 'evaluate_stage5_two_tier is absent (ImportError on import)'; (4) TDD plan table line 489: change 'deprecation warning' to 'removal (ImportError test)'."
+    },
+    {
+      "severity": "high",
+      "category": "documentation",
+      "file": "tlmforge/specs/check-convergence-round-aware/README.md",
+      "line": 399,
+      "finding": "test_integration_stage3_round_2_with_carryover (line 399) still says action='retry' (or escalate if iteration counter says cap) with no concrete iteration or max_iterations values. This was R1-A6 and was not addressed in the round-1 fixes. The 'or escalate' ambiguity is unresolved — implementer will pick arbitrarily.",
+      "suggested_fix": "Specify concrete values: 'iteration=2, max_iterations=3 -> action=retry'. Add a second variant with 'iteration=4, max_iterations=3 -> action=escalate'. Remove the parenthetical 'or escalate' from the single test description — it belongs as a separate test case."
+    },
+    {
+      "severity": "high",
+      "category": "documentation",
+      "file": "tlmforge/specs/check-convergence-round-aware/README.md",
+      "line": 500,
+      "finding": "Final verification criteria (line 500) states 'Test count >= 25 (Phase 0: ~15, Phase 1: ~7, Phase 2: ~9, Phase 3: ~8, Phase 4: ~5)' — stale counts that were superseded by the round-1 fixes (Phase 0 grew to ~17, Phase 1 grew to ~15, Phase 3 shrank to ~6, total ~52). The floor '>= 25' is now so low it provides no quality gate; an implementation skipping half the tests would pass.",
+      "suggested_fix": "Update line 500 to reflect current per-phase actuals: 'Test count >= 45 (Phase 0: ~17, Phase 1: ~15, Phase 2: ~9, Phase 3: ~6, Phase 4: ~5)'. This matches the per-phase sections and the round-1-fixes.md summary (line 166: 'Total: ~52 tests')."
+    }
+  ]
+}

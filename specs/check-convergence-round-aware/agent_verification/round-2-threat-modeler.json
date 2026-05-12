@@ -1,0 +1,34 @@
+{
+  "reviewer": "threat-modeler",
+  "schema_version": "1.0",
+  "iteration": 2,
+  "status": "ok",
+  "_note": "JSON returned inline by threat-modeler (still no Write tool in running session per DF3). Saved by main Claude as faithful transcription.",
+  "verdict": "needs_revision",
+  "findings": [
+    {
+      "severity": "medium",
+      "category": "security",
+      "file": "architecture",
+      "line": null,
+      "finding": "TH1 PARTIALLY FIXED: iteration cross-check is added to _load_json_safely, but load_final_audit_jsons (Stage 5) has no round_n param and the plan never specifies what expected_iteration value it passes. If None, the cross-check silently skips and Stage 5 final-audit JSONs remain ungarded.",
+      "suggested_fix": "Phase 2 must state explicitly that load_final_audit_jsons calls _load_json_safely with expected_iteration=1 (Stage 5 is single-shot always iteration 1). _load_json_safely should treat None as invalid — raise, not silently skip."
+    },
+    {
+      "severity": "high",
+      "category": "architecture",
+      "file": "architecture",
+      "line": null,
+      "finding": "TH5 NOT FIXED + plan self-contradictory on evaluate_stage5_two_tier fate. Phase 3 says REMOVE entirely (no shim), but Scope-In bullet, Architecture diagram 'Obsolete (deprecated)' block, Risk audit F3, Decisions made, and Verification criterion #5 all still describe a DeprecationWarning shim. An implementer following the Scope/Verification sections will keep the shim, reintroducing the silent-CRITICAL-discard bug.",
+      "suggested_fix": "Update all 5 stale sections to match Phase 3 removal: Scope In removes deprecation bullet; Architecture diagram deletes 'Obsolete (deprecated)' block; Risk audit F3 mitigation = REMOVE not shim; Decisions made = removal rationale; Verification #5 = 'evaluate_stage5_two_tier does NOT exist (ImportError on import)'."
+    },
+    {
+      "severity": "medium",
+      "category": "architecture",
+      "file": "architecture",
+      "line": null,
+      "finding": "NEW: Threat model section disavows defending against adversarial JSON ('local trust zone only') but Phase 1 adds 5 defenses against crafted inputs. The stated trust model contradicts the implementation; future maintainers may remove the defenses as 'unnecessary.' Line 62-63 also references DeprecationWarning as a threat-model item for a function being deleted.",
+      "suggested_fix": "Rewrite threat model section: remove 'adversarial JSON not defended' clause; add Phase 1 hardenings to 'What we defend against'; remove DeprecationWarning reference."
+    }
+  ]
+}
