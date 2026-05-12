@@ -4,6 +4,8 @@ A Claude Code plugin that enforces production-grade feature development discipli
 
 **The core idea:** you cannot ship until independent adversarial reviewers — with a mathematically enforced agreement metric — say the work is done.
 
+📐 **Architecture diagram + commentary:** [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — the living flow chart for the lean review architecture (classification gate, 7-stage Deep path, Light path, escalation paths, spawn-count math). Updated whenever the flow changes.
+
 ## What's inside
 
 **Skills (5)**

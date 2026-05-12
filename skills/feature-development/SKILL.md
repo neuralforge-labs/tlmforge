@@ -56,8 +56,8 @@ this skill takes over from Stage 1.
 ## The recipe at a glance
 
 ```
-Stage 1: Spec audit (main Claude)            →  specs/<f>/spec_audit.md
-         ↓  conditional gate (only if [GATE-BLOCKING] questions / TIER1 keywords)
+Stage 1: Request audit (main Claude)         →  specs/<f>/spec_audit.md
+         ↓  conditional gate (only if ANY [GATE-BLOCKING] open question)
 Stage 2: Master plan (main Claude)           →  specs/<f>/README.md
          ↓  conditional gate (only if plan introduces unapproved decisions)
 Stage 3: Plan review — bounded 3-round loop
@@ -94,11 +94,18 @@ phase-end, Stage 5 final).
 
 ---
 
-## Stage 1 — Spec Audit (find flaws BEFORE designing)
+## Stage 1 — Request audit (produces `spec_audit.md`)
 
-**Goal:** Take the user's request (often a vague spec) and surface every
-hidden assumption, threat, performance concern, and edge case before
-investing in a design.
+**Goal:** Audit the **user's request** — treat that request AS the
+incoming spec — and surface every hidden assumption, threat, performance
+concern, edge case, and irreversible step in it BEFORE investing in a
+design.
+
+The output IS the structured spec. "Spec audit" is forward-looking — the
+artifact being produced (`spec_audit.md`) is the audit of the user's
+stated intent. There is no pre-existing spec document being reviewed at
+this stage; Stage 1 is the act of turning a vague-or-precise human
+request into a structured artifact with surfaced unknowns.
 
 This is the **single most valuable artifact**. The encryption README's
 F1-F16 audit is what made everything that followed solid.
@@ -163,30 +170,35 @@ Padding with manufactured LOW findings is worse than fewer real ones.
 
 ### Stage 1 → Stage 2 gate (conditional — only when human input is needed)
 
-After writing `spec_audit.md`, evaluate whether the audit contains **CRITICAL open questions
-that only the user can answer** — product decisions, scope choices, or irreversible tradeoffs
-that are not derivable from the codebase or the task.
+After writing `spec_audit.md`, evaluate whether the audit contains **open questions
+that only the user can answer** — product decisions, scope choices, or irreversible
+tradeoffs that aren't derivable from the codebase or the user's stated request.
 
-The gate is structural, not a judgment call. In the spec audit's "Open questions for the user"
-section, tag every question as `[GATE-BLOCKING]` or `[INFORMATIONAL]`:
+The gate is structural, not a judgment call. In the spec audit's "Open questions
+for the user" section, tag every question as `[GATE-BLOCKING]` or `[INFORMATIONAL]`:
 
-- `[GATE-BLOCKING]` — a fork in the road only the user can resolve (scope, irreversible tradeoff,
-  product decision). Default to this tag when uncertain.
+- `[GATE-BLOCKING]` — a fork in the road only the user can resolve (scope,
+  irreversible tradeoff, product decision). Default to this tag when uncertain.
 - `[INFORMATIONAL]` — a risk Claude will address in the plan; no user decision needed.
 
-**The gate fires if ANY question is tagged `[GATE-BLOCKING]`, OR if the audit mentions any
-TIER1 keyword** (auth, payment, encryption, PII, migration, IAM, RBAC, token, password) —
-regardless of question tags, because misclassification on TIER1 paths is expensive.
+**The gate fires if ANY question is tagged `[GATE-BLOCKING]`. That is the entire rule.**
+No hardcoded keyword list (auth/payment/etc.); the plugin is generic and shouldn't
+assume project-specific sensitivity terms. If a sensitive area was genuinely touched,
+it surfaces as a `[GATE-BLOCKING]` question during the audit — trust the audit's
+own tagging discipline. The classification gate at task entry (see
+`~/.claude/CLAUDE.md`) already routed Deep work to this skill; we don't need a
+second classifier here.
 
 **If gate fires:**
 End your message with: `SPEC_AUDIT_COMPLETE — [GATE-BLOCKING] questions require your input: [list them]`
 Do NOT proceed to Stage 2 until the user replies.
 
-**If gate does not fire (no `[GATE-BLOCKING]` questions, no TIER1 keywords):**
-Proceed directly to Stage 2 in the same turn. The user approved the goal; agents own quality.
+**If gate does not fire (no `[GATE-BLOCKING]` questions):**
+Proceed directly to Stage 2 in the same turn. The user approved the goal; agents
+own quality.
 
-The asymmetry is intentional: a false positive (unnecessary gate) costs one round-trip. A false
-negative (skipped gate on a product decision) can cost a wasted feature.
+The asymmetry is intentional: a false positive (unnecessary gate) costs one round-trip.
+A false negative (skipped gate on a product decision) can cost a wasted feature.
 
 ---
 

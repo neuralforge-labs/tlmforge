@@ -1,5 +1,47 @@
 # Changelog
 
+## 0.5.2 (2026-05-12)
+
+### Stage 1→2 gate: remove hardcoded keyword trigger
+
+0.5.1's SKILL.md said the Stage 1→2 gate fires on `[GATE-BLOCKING]`
+questions **OR** the presence of any TIER1 keyword (`auth`, `payment`,
+`encryption`, `PII`, `migration`, `IAM`, `RBAC`, `token`, `password`).
+
+That's the same anti-pattern as hardcoded paths: the plugin is generic
+and shouldn't assume project-specific sensitivity terms. If a sensitive
+area was genuinely touched, the audit tags it as `[GATE-BLOCKING]` —
+trust the audit's own discipline.
+
+**Fix in 0.5.2:** Stage 1→2 gate fires on `[GATE-BLOCKING]` tags only.
+No keyword list. The classification gate at task entry (in
+`~/.claude/CLAUDE.md`) already routed Deep work to this skill; we don't
+need a second classifier inside Stage 1.
+
+### Stage 1 renamed: "Spec audit" → "Request audit (produces spec_audit.md)"
+
+"Spec audit" was backward-looking — sounded like there's an existing
+spec doc to audit. There isn't, at Stage 1. The act IS turning the
+user's request into a structured spec by auditing its hidden assumptions,
+threats, failure modes, costs, and rollback risks. The artifact filename
+stays `spec_audit.md` (forward-looking — the audit is the spec).
+
+### NEW: `docs/ARCHITECTURE.md`
+
+Living flow-chart document for the lean review architecture. Linked from
+README.md. Updated whenever the flow changes (stage gate conditions,
+reviewer roster, classification logic, carryover artifacts, escalation
+protocol).
+
+### Migration
+
+None — pure clarification + gate-simplification. Anyone relying on the
+TIER1 keyword OR-trigger should re-audit their workflow: if a feature
+needed user sign-off because it touched (e.g.) auth, that surfaced as a
+`[GATE-BLOCKING]` question. The keyword shortcut was redundant.
+
+---
+
 ## 0.5.1 (2026-05-12)
 
 ### Fatal-bug fix on 0.5.0 reviewer agents
