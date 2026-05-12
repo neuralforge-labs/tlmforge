@@ -184,9 +184,52 @@ Write two files:
 - `tester_review.md` — findings with severity + test stubs
 - `tester_coverage.md` — raw coverage output + uncovered line ranges
 
-### 4. Per-phase scoping (Stage 4.6)
+### 4. Stage-specific behavior
 
-If the launch prompt contains `PHASE_DIFF_ONLY: true` or a `git_sha: <sha>` anchor, scope findings to code within `git diff ${sha}..HEAD` only. Cross-phase gaps found outside the diff are expected — report them with `severity: low, category: meta, finding: "cross-phase gap (expected)"`. Do NOT block on these.
+The launch prompt will indicate which stage you're invoked at. Adjust your output and inputs accordingly:
+
+#### Stage 3, Round 1 (cold review of plan)
+- Read spec_audit.md + README.md only. No code exists yet.
+- Output `tester_review.md` + `tester_review.json` as usual.
+- **ALSO** emit `tester_edge_cases.json` — the carryover artifact that Stage 4 reads:
+
+```json
+{
+  "schema_version": "1.0",
+  "feature": "<feature-slug>",
+  "produced_by": "tester-stage-3-round-1",
+  "edge_cases": [
+    {"id": "EC1", "title": "<short title>", "surface": "<file or area>",
+     "expected": "<expected behavior>", "test_stub": "<runnable code or pseudocode>",
+     "source": "design"}
+  ]
+}
+```
+
+Every CRITICAL/HIGH edge case you raise in findings gets a corresponding entry here.
+This file is read at Stage 4 (by main Claude as the scenario seed) and at Stage 4 phase-end
+(by you, in coverage-validation mode). Do not skip this artifact.
+
+#### Stage 3, Round 2 or 3 (iterative review)
+- Launch prompt will provide: `iteration: 2` (or 3), `round_minus_1_findings_path: agent_verification/round-1-tester.json`, `fixes_path: agent_verification/round-1-fixes.md`.
+- Read YOUR own round-(N-1) findings. Read the fixes doc. Read the updated README.md.
+- For each of YOUR prior findings: verdict `FIXED` / `PARTIALLY` / `NOT_FIXED` with file:line evidence.
+- Add new findings only for issues you genuinely missed in round 1 (NEW signal, not re-derivation of the same finding from a different angle).
+- Output to `agent_verification/round-N-tester.{md,json}`.
+
+#### Stage 4 phase-end (verification of an implemented phase)
+- Launch prompt provides: `phase_start_sha: <sha>`, `phase_n: <N>`, `feature_dir: specs/<feature>/`.
+- Scope to `git diff <phase_start_sha>..HEAD` only. Cross-phase concerns outside that diff are NOT your job at this stage — flag them as `severity: low, category: meta` and proceed.
+- Read `agent_verification/tester_edge_cases.json` (from Stage 3 round 1) as the scenario floor. For each edge case: is there a test covering it in the diff? At which layer (unit / integration / E2E)? Is the test passing?
+- **Run the test suite yourself** (using the runner you detect via the table in §1). Capture actual pass/fail counts.
+- Cross-check against `phase-N-evidence.md`'s claimed numbers. If evidence says "42 passed" but you observe failures or a different count → CRITICAL.
+- New scenarios surfaced during impl (marked `source: "impl"` in `tester_edge_cases.json` by main Claude) — verify they're tested too.
+- Output to `phase-N-verification/tester.{md,json}`.
+
+#### Stage 5 final (full-diff scan — single shot)
+- Launch prompt provides feature directory; you scope to the full diff `<feature-start-sha>..HEAD`.
+- This is the last gate before live verification. Treat anything HIGH+ as a hard block.
+- Output to `agent_verification/final_tester.{md,json}`.
 
 ## Verdict Rules
 

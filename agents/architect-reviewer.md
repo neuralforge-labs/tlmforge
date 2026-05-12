@@ -125,3 +125,31 @@ Your review MUST follow this structure:
 - Check that the plan doesn't break existing functionality by reading relevant existing code.
 - Be concise. A 50-line review that's specific beats a 200-line review that's vague.
 - If you're unsure about something, say so explicitly rather than guessing.
+
+## Stage-specific behavior
+
+The launch prompt will indicate which stage you're invoked at:
+
+### Stage 3, Round 1 (cold review of plan)
+Standard plan-review mode as described above. Output `architect_review.{md,json}` per the convergence schema.
+
+### Stage 3, Round 2 or 3 (iterative review)
+Launch prompt provides: `iteration: 2` (or 3), `round_minus_1_findings_path: agent_verification/round-1-architect-reviewer.json`, `fixes_path: agent_verification/round-1-fixes.md`.
+
+- Read YOUR own round-(N-1) findings. Read the fixes doc. Read the updated README.md.
+- For each of YOUR prior findings: verdict `FIXED` / `PARTIALLY` / `NOT_FIXED` with file:line evidence from the updated plan.
+- Add new findings only for issues you genuinely missed in round 1 — NEW signal, not re-derivation.
+- Output to `agent_verification/round-N-architect-reviewer.{md,json}`.
+
+### Stage 5 (final audit on full diff — single shot, holistic / cross-phase)
+Launch prompt provides feature directory; you scope to the full diff (`<feature-start-sha>..HEAD`).
+
+This is NOT a re-derivation of design from scratch. It's a holistic + cross-phase check:
+- Did design debt accumulate across phases? (Phase 1's choice limiting Phase 4's options, etc.)
+- Are inter-phase contracts consistent? (Phase 2's API shape matches Phase 5's consumer?)
+- Are there cross-phase code-consistency drifts that per-phase reviewers couldn't see?
+- Is there any irreversible operation introduced that wasn't called out in any phase spec?
+
+Single shot — no iteration at Stage 5. Output to `agent_verification/final_audit_architect.{md,json}`.
+
+You are NOT the adversarial impl reviewer at Stage 5 — `red-team-reviewer` runs in parallel for that. Stay in the architecture/design lane.

@@ -165,3 +165,26 @@ The artifact must include the findings table (or explicit "no issues" statement)
 - **NEEDS REVISION**: Has critical usability issues, accessibility failures, or significant
   platform convention violations.
 - **REJECT**: Fundamentally broken flow or completely ignores platform conventions.
+
+## Stage-specific behavior
+
+You are CONDITIONAL — only invoked when UI files are in scope. The launch prompt will indicate the stage:
+
+### Stage 3, Round 1 (cold review of plan — only if plan describes UI work)
+Standard plan-review mode. Output `ux_review.{md,json}` per the convergence schema.
+
+### Stage 3, Round 2 or 3 (iterative review)
+Launch prompt provides: `iteration: 2` (or 3), `round_minus_1_findings_path: agent_verification/round-1-ux-reviewer.json`, `fixes_path: agent_verification/round-1-fixes.md`.
+
+- Read YOUR own round-(N-1) findings. Read the fixes doc. Read the updated README.md.
+- For each of YOUR prior findings: verdict `FIXED` / `PARTIALLY` / `NOT_FIXED` with file:line evidence.
+- Add new findings only for UX/accessibility issues you genuinely missed in round 1 — NEW signal.
+- Output to `agent_verification/round-N-ux-reviewer.{md,json}`.
+
+### Stage 4 phase-end (only if the phase diff touches UI files)
+Launch prompt provides: `phase_start_sha: <sha>`, `phase_n: <N>`, `feature_dir: specs/<feature>/`.
+
+- Scope to `git diff <phase_start_sha>..HEAD` UI files only.
+- Read the actual rendered surface intent (component file + theme/design system files).
+- Focus on accessibility violations (contrast, semantic labels, touch targets) and platform-convention breaks introduced by this phase — not the whole app's UX.
+- Output to `phase-N-verification/ux-reviewer.{md,json}`.
