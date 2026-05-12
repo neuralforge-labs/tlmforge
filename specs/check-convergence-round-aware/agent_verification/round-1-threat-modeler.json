@@ -1,0 +1,50 @@
+{
+  "reviewer": "threat-modeler",
+  "schema_version": "1.0",
+  "iteration": 1,
+  "status": "ok",
+  "verdict": "needs_revision",
+  "_note": "JSON returned inline by threat-modeler agent in chat output (Write tool not effective in running session — confirms saved memory feedback_subagent_files_need_session_restart). Saved by main Claude as faithful transcription.",
+  "findings": [
+    {
+      "severity": "critical",
+      "category": "security",
+      "file": "architecture",
+      "line": null,
+      "finding": "Gate forgery via unauthenticated filesystem writes: any process with write access to specs/<feature>/agent_verification/ can manufacture convergence by writing approve-verdict, empty-findings JSON files for every expected role. The convergence rule has no provenance check — it trusts whatever exists at the expected path.",
+      "suggested_fix": "Add a structural cross-check in the loaders: verify that the `iteration` field inside the loaded JSON matches the `round_n` argument. Mismatched iteration or missing required keys should be treated as reviewer_json_missing (return None). For stronger provenance, sign each JSON with a session HMAC and verify before accepting."
+    },
+    {
+      "severity": "high",
+      "category": "security",
+      "file": "architecture",
+      "line": null,
+      "finding": "Schema-absent JSON bypasses convergence silently: _load_json_safely accepts any syntactically valid JSON including `{}`. evaluate_convergence defaults missing `verdict` to `approve` and missing `findings` to `[]`, so an empty dict per expected role produces converged=True with action=advance.",
+      "suggested_fix": "After json.load succeeds, validate that the required top-level keys (reviewer, schema_version, iteration, verdict, findings) are present. On failure, return None — which triggers the reviewer_json_missing synthetic CRITICAL in evaluate_convergence."
+    },
+    {
+      "severity": "high",
+      "category": "security",
+      "file": "architecture",
+      "line": null,
+      "finding": "Path traversal via unsanitized feature_dir and role strings: the loaders construct filesystem paths by joining feature_dir and role name strings without normalization or containment checks. A prompt-injected feature_dir (e.g. ../../etc) or a role name containing path separators escapes the specs/ tree and causes arbitrary file opens.",
+      "suggested_fix": "After constructing each path, assert path.resolve().is_relative_to(Path(feature_dir).resolve()). If not, return None and log a warning. Validate role strings against the known set before splicing into paths."
+    },
+    {
+      "severity": "medium",
+      "category": "missing_error_handling",
+      "file": "architecture",
+      "line": null,
+      "finding": "Unbounded JSON file read: _load_json_safely calls json.load with no file-size guard. A large file (100 MB+) written by an anomalous reviewer agent is fully buffered into memory before parsing. In a multi-round, multi-phase loop this can cause OOM and crash the orchestration.",
+      "suggested_fix": "Check os.path.getsize(path) before opening. If size exceeds 1 MB (reviewer JSONs are never legitimately larger than ~100 KB), return None and log a warning."
+    },
+    {
+      "severity": "low",
+      "category": "architecture",
+      "file": "architecture",
+      "line": null,
+      "finding": "DeprecationWarning on evaluate_stage5_two_tier is suppressible without error: warnings.filterwarnings('ignore') silences it globally. Callers that suppress warnings get the old two-tier semantics silently, which differ materially from the new single-shot dual.",
+      "suggested_fix": "If grep confirms zero in-tree callers, remove the function entirely instead of keeping a suppressible warning shim. If a grace period is needed, also write to stderr unconditionally (bypassing the warnings filter) on first call."
+    }
+  ]
+}

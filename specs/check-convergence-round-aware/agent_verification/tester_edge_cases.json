@@ -1,0 +1,103 @@
+{
+  "schema_version": "1.0",
+  "feature": "check-convergence-round-aware",
+  "produced_by": "tester-stage-3-round-1",
+  "edge_cases": [
+    {
+      "id": "EC1",
+      "title": "non-UTF-8 bytes in JSON file raise UnicodeDecodeError not JSONDecodeError",
+      "surface": "check_convergence.py / _load_json_safely",
+      "expected": "_load_json_safely returns None without raising — UnicodeDecodeError must be caught",
+      "test_stub": "import tempfile, os\ndef test_load_json_safely_non_utf8_bytes(tmp_path):\n    p = tmp_path / 'bad.json'\n    p.write_bytes(b'\\xff\\xfe{\\x00i\\x00n\\x00v\\x00a\\x00l\\x00i\\x00d\\x00}')\n    result = _load_json_safely(str(p))\n    assert result is None",
+      "source": "design"
+    },
+    {
+      "id": "EC2",
+      "title": "cap_hit boundary: iteration=3/max=3 does NOT trigger cap in evaluate_convergence",
+      "surface": "check_convergence.py / evaluate_convergence line 135",
+      "expected": "cap_hit=False when iteration==max_iterations because code uses `>` not `>=`; must be pinned as intentional before any change",
+      "test_stub": "def test_evaluate_convergence_cap_hit_exact_boundary():\n    jsons = {'r': {'reviewer': 'r', 'schema_version': '1.0', 'iteration': 3,\n                   'verdict': 'needs_revision',\n                   'findings': [{'severity': 'critical', 'category': 'bug',\n                                 'file': 'f', 'finding': 'x'*8,\n                                 'suggested_fix': 'y'*8}]}}\n    result = evaluate_convergence(jsons, ['r'], iteration=3, max_iterations=3)\n    assert result['cap_hit'] is False\n    assert result['converged'] is False",
+      "source": "design"
+    },
+    {
+      "id": "EC3",
+      "title": "evaluate_stage5_two_tier uses >= for cap while evaluate_convergence uses > — asymmetric boundary",
+      "surface": "check_convergence.py / evaluate_stage5_two_tier line 364 vs evaluate_convergence line 135",
+      "expected": "evaluate_stage5_two_tier with iteration=3/max=3 and tier-2 CRITICAL sets requires_user_override=True; evaluate_convergence with same inputs sets cap_hit=False",
+      "test_stub": "def test_evaluate_stage5_two_tier_cap_asymmetry():\n    tier1 = {'architect': {'reviewer': 'architect', 'schema_version': '1.0',\n                           'iteration': 3, 'status': 'ok', 'verdict': 'approve',\n                           'findings': []}}\n    tier2 = {'reviewer': 'red-team', 'schema_version': '1.0', 'iteration': 3,\n              'status': 'ok', 'verdict': 'needs_revision',\n              'findings': [{'severity': 'critical', 'category': 'security',\n                            'file': 'f', 'finding': 'x'*8, 'suggested_fix': 'y'*8}]}\n    result = evaluate_stage5_two_tier(tier1, tier2, iteration=3, max_iterations=3)\n    assert result['requires_user_override'] is True",
+      "source": "design"
+    },
+    {
+      "id": "EC4",
+      "title": "evaluate_stage5_dual CRITICAL must return action='escalate' not 'retry' — no retry budget at Stage 5",
+      "surface": "check_convergence.py / evaluate_stage5_dual (new function)",
+      "expected": "Any CRITICAL finding in either agent returns action='escalate'; 'retry' is never a valid action for single-shot Stage 5",
+      "test_stub": "def test_evaluate_stage5_dual_no_retry_on_critical():\n    red_team = {'reviewer': 'red-team', 'schema_version': '1.0', 'iteration': 1,\n                'status': 'ok', 'verdict': 'needs_revision',\n                'findings': [{'severity': 'critical', 'category': 'security',\n                              'file': 'f', 'finding': 'x'*8, 'suggested_fix': 'y'*8}]}\n    architect = {'reviewer': 'architect', 'schema_version': '1.0', 'iteration': 1,\n                 'status': 'ok', 'verdict': 'approve', 'findings': []}\n    result = evaluate_stage5_dual(red_team, architect)\n    assert result['final_converged'] is False\n    assert result['action'] == 'escalate'\n    assert result['action'] != 'retry'",
+      "source": "design"
+    },
+    {
+      "id": "EC5",
+      "title": "evaluate_stage5_two_tier shim must not silently discard CRITICAL findings from non-selected tier-1 roles",
+      "surface": "check_convergence.py / evaluate_stage5_two_tier deprecation shim",
+      "expected": "If any tier-1 role has a real CRITICAL, tier1_converged=False regardless of which role the shim collapses to",
+      "test_stub": "def test_evaluate_stage5_two_tier_shim_preserves_tier1_criticals():\n    tier1 = {\n        'code-reviewer': {'reviewer': 'code-reviewer', 'schema_version': '1.0',\n                          'iteration': 1, 'status': 'ok', 'verdict': 'needs_revision',\n                          'findings': [{'severity': 'critical', 'category': 'bug',\n                                        'file': 'f', 'finding': 'x'*8,\n                                        'suggested_fix': 'y'*8}]},\n        'architect': {'reviewer': 'architect', 'schema_version': '1.0',\n                      'iteration': 1, 'status': 'ok', 'verdict': 'approve',\n                      'findings': []}\n    }\n    import warnings\n    with warnings.catch_warnings(record=True):\n        result = evaluate_stage5_two_tier(tier1, None, iteration=1)\n    assert result['tier1_converged'] is False",
+      "source": "design"
+    },
+    {
+      "id": "EC6",
+      "title": "evaluate_stage5_two_tier deprecation warning must be emitted on every call",
+      "surface": "check_convergence.py / evaluate_stage5_two_tier",
+      "expected": "Calling evaluate_stage5_two_tier emits DeprecationWarning; can be verified with warnings.catch_warnings",
+      "test_stub": "import warnings\ndef test_evaluate_stage5_two_tier_deprecation_warning():\n    tier1 = {'architect': {'reviewer': 'architect', 'schema_version': '1.0',\n                           'iteration': 1, 'status': 'ok', 'verdict': 'approve',\n                           'findings': []}}\n    with warnings.catch_warnings(record=True) as w:\n        warnings.simplefilter('always')\n        evaluate_stage5_two_tier(tier1, None, iteration=1)\n    assert any(issubclass(warning.category, DeprecationWarning) for warning in w)",
+      "source": "design"
+    },
+    {
+      "id": "EC7",
+      "title": "iteration=0 passed to evaluate_convergence produces schema-invalid synthetic review dicts",
+      "surface": "check_convergence.py / evaluate_convergence + _build_synthetic_review",
+      "expected": "evaluate_convergence raises ValueError for iteration < 1 (to match review_schema.json minimum:1) OR documents and tests the fallback behavior explicitly",
+      "test_stub": "def test_evaluate_convergence_iteration_zero():\n    import pytest\n    # If the implementation adds a guard:\n    with pytest.raises(ValueError, match='iteration'):\n        evaluate_convergence({}, [], iteration=0)\n    # If no guard is added (characterization), assert current behavior:\n    # result = evaluate_convergence({}, [], iteration=0)\n    # assert result['iteration'] == 0  # pin, do not silently fix",
+      "source": "design"
+    },
+    {
+      "id": "EC8",
+      "title": "Phase 4 integration test ambiguous 'retry or escalate' assertion must be deterministic",
+      "surface": "specs/check-convergence-round-aware/README.md Phase 4 test descriptions",
+      "expected": "test_integration_stage3_round_2_with_carryover must be split into two tests with exact iteration values; no 'or' conditionals in assertions",
+      "test_stub": "def test_integration_stage3_round_2_all_missing_retry(tmp_path):\n    # Write round-1 files only; do NOT write round-2 files\n    feature_dir = tmp_path / 'specs' / 'test-feature'\n    (feature_dir / 'agent_verification').mkdir(parents=True)\n    # (write round-1 files for round-1 pass, skip round-2)\n    jsons = load_stage3_round_jsons(str(feature_dir), round_n=2,\n                                    expected_roles=['architect', 'code-reviewer', 'tester'])\n    result = evaluate_convergence(jsons, ['architect', 'code-reviewer', 'tester'],\n                                  iteration=2, max_iterations=3)\n    assert result['action'] == 'retry'\n\ndef test_integration_stage3_round_4_all_missing_escalate(tmp_path):\n    feature_dir = tmp_path / 'specs' / 'test-feature'\n    (feature_dir / 'agent_verification').mkdir(parents=True)\n    jsons = load_stage3_round_jsons(str(feature_dir), round_n=4,\n                                    expected_roles=['architect', 'code-reviewer', 'tester'])\n    result = evaluate_convergence(jsons, ['architect', 'code-reviewer', 'tester'],\n                                  iteration=4, max_iterations=3)\n    assert result['action'] == 'escalate'",
+      "source": "design"
+    },
+    {
+      "id": "EC9",
+      "title": "load_stage3_round_jsons with hyphenated role names: path construction must be verified with real role names",
+      "surface": "check_convergence.py / load_stage3_round_jsons",
+      "expected": "round-1-code-reviewer.json, round-1-red-team.json resolved correctly; tests using single-word role names do not exercise this",
+      "test_stub": "def test_load_stage3_round_jsons_hyphenated_roles(tmp_path):\n    av = tmp_path / 'agent_verification'\n    av.mkdir()\n    import json\n    payload = {'reviewer': 'code-reviewer', 'schema_version': '1.0', 'iteration': 1,\n               'status': 'ok', 'verdict': 'approve', 'findings': []}\n    (av / 'round-1-code-reviewer.json').write_text(json.dumps(payload))\n    result = load_stage3_round_jsons(str(tmp_path), round_n=1,\n                                     expected_roles=['code-reviewer', 'red-team'])\n    assert result['code-reviewer'] is not None\n    assert result['red-team'] is None",
+      "source": "design"
+    },
+    {
+      "id": "EC10",
+      "title": "load_final_audit_jsons must not load tester_edge_cases.json as a reviewer artifact",
+      "surface": "check_convergence.py / load_final_audit_jsons",
+      "expected": "tester_edge_cases.json present in agent_verification/ is NOT returned by load_final_audit_jsons; only final_audit_<role>.json files are loaded",
+      "test_stub": "def test_load_final_audit_jsons_ignores_carryover(tmp_path):\n    av = tmp_path / 'agent_verification'\n    av.mkdir()\n    import json\n    # Write a carryover file\n    (av / 'tester_edge_cases.json').write_text(json.dumps({'schema_version': '1.0'}))\n    # Write one real final audit file\n    payload = {'reviewer': 'red-team', 'schema_version': '1.0', 'iteration': 1,\n               'status': 'ok', 'verdict': 'approve', 'findings': []}\n    (av / 'final_audit_red-team.json').write_text(json.dumps(payload))\n    result = load_final_audit_jsons(str(tmp_path), expected_roles=['red-team', 'architect'])\n    assert 'tester_edge_cases' not in result\n    assert result['red-team'] is not None\n    assert result['architect'] is None",
+      "source": "design"
+    },
+    {
+      "id": "EC11",
+      "title": "feature_dir path with spaces or symlinks must not break path construction in loaders",
+      "surface": "check_convergence.py / load_stage3_round_jsons, load_phase_end_round_jsons, load_final_audit_jsons",
+      "expected": "Path joins using os.path.join or pathlib.Path handle spaces and symlinks correctly; no string concatenation with / that would break on spaces",
+      "test_stub": "def test_load_stage3_round_jsons_path_with_spaces(tmp_path):\n    import json\n    spaced = tmp_path / 'my feature dir'\n    av = spaced / 'agent_verification'\n    av.mkdir(parents=True)\n    payload = {'reviewer': 'architect', 'schema_version': '1.0', 'iteration': 1,\n               'status': 'ok', 'verdict': 'approve', 'findings': []}\n    (av / 'round-1-architect.json').write_text(json.dumps(payload))\n    result = load_stage3_round_jsons(str(spaced), round_n=1, expected_roles=['architect'])\n    assert result['architect'] is not None",
+      "source": "design"
+    },
+    {
+      "id": "EC12",
+      "title": "phase-end round-1 uses bare <role>.json path (no round-N prefix) — loader must not use round-1- prefix for round 1",
+      "surface": "check_convergence.py / load_phase_end_round_jsons",
+      "expected": "For phase_n=1, round_n=1: file is phase-1-verification/architect.json (no round prefix). For round_n=2: file is phase-1-verification/round-2-architect.json",
+      "test_stub": "def test_load_phase_end_round_jsons_round_1_no_prefix(tmp_path):\n    import json\n    pv = tmp_path / 'phase-1-verification'\n    pv.mkdir()\n    payload = {'reviewer': 'architect', 'schema_version': '1.0', 'iteration': 1,\n               'status': 'ok', 'verdict': 'approve', 'findings': []}\n    # Bare path, no round prefix\n    (pv / 'architect.json').write_text(json.dumps(payload))\n    # Also write the round-1 prefixed path to confirm it's NOT used\n    (pv / 'round-1-architect.json').write_text(json.dumps({'wrong': True}))\n    result = load_phase_end_round_jsons(str(tmp_path), phase_n=1, round_n=1,\n                                        expected_roles=['architect'])\n    assert result['architect']['reviewer'] == 'architect'",
+      "source": "design"
+    }
+  ]
+}

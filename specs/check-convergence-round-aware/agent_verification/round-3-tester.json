@@ -1,0 +1,57 @@
+{
+  "reviewer": "tester",
+  "schema_version": "1.0",
+  "iteration": 3,
+  "status": "ok",
+  "verdict": "needs_revision",
+  "findings": [
+    {
+      "id": "T6",
+      "severity": "medium",
+      "category": "test_coverage",
+      "prior_status": "PARTIALLY",
+      "round3_status": "NOT_FIXED",
+      "file": "specs/check-convergence-round-aware/README.md",
+      "line": 417,
+      "finding": "test_integration_stage3_round_2_with_carryover_escalate is named _escalate but its own inline rationale concludes 'action=retry still since cap_hit is False' for the stated inputs (iteration=3, max_iterations=3). The test name and asserted value are contradicted by the description text. An implementer reading this entry cannot determine which action to assert.",
+      "suggested_fix": "Change the _escalate test to use iteration=4, max_iterations=3 — which actually produces action='escalate' under the adopted > semantic. The current iteration=3,max=3 case belongs in a boundary test named _retry_at_cap_boundary asserting action='retry'. This resolves the name/description/assertion contradiction without altering any architectural decision.",
+      "notes": "The round-2 fix split the single ambiguous test into two entries as required, but then introduced a new internal contradiction in the _escalate entry. The core ambiguity migrated from 'retry or escalate' phrasing into a test whose name says escalate but body says retry."
+    },
+    {
+      "id": "T7",
+      "severity": "medium",
+      "category": "test_coverage",
+      "prior_status": "NOT_FIXED",
+      "round3_status": "NOT_FIXED",
+      "file": "specs/check-convergence-round-aware/README.md",
+      "line": "308-316",
+      "finding": "Phase 2 test list still contains no test explicitly naming code-reviewer or red-team-reviewer as role inputs. Hyphenated path construction in load_stage3_round_jsons remains untested at the plan level.",
+      "suggested_fix": "Add test_load_stage3_round_jsons_hyphenated_roles with round-1-code-reviewer.json and round-1-red-team-reviewer.json as expected_roles. EC9 in tester_edge_cases.json provides a concrete stub.",
+      "notes": "Explicitly deferred to implementation in round-2-fixes.md. Not a plan-level blocker per the fix author's judgment, but the gap remains. Flagging for record-keeping; not driving this iteration's verdict alone."
+    },
+    {
+      "id": "NEW-1",
+      "severity": "low",
+      "category": "consistency",
+      "prior_status": "medium",
+      "round3_status": "PARTIALLY_FIXED",
+      "file": "specs/check-convergence-round-aware/README.md",
+      "line": 508,
+      "finding": "TDD plan table row for Phase 3 still reads 'evaluate_stage5_dual single-shot semantics; deprecation warning'. Five of the six stale locations were fixed; this one was missed. The plan elsewhere specifies ImportError (removal), not DeprecationWarning.",
+      "suggested_fix": "Update README.md line 508 Phase 3 table cell to: 'evaluate_stage5_dual single-shot semantics; ImportError on import of removed function'.",
+      "notes": "One-word fix. Sections fixed: Scope In (line 38), Architecture diagram (lines 141-145), Risk audit F3 (line 440), Decisions made (lines 462-467), Verification criterion #5 (line 522). Section missed: TDD table row (line 508)."
+    },
+    {
+      "id": "NEW-2",
+      "severity": "low",
+      "category": "test_coverage",
+      "prior_status": "low",
+      "round3_status": "FIXED",
+      "file": "specs/check-convergence-round-aware/README.md",
+      "line": 519,
+      "finding": "FIXED. Test count floor raised to >= 45 with per-phase breakdown (Phase 0: ~17, Phase 1: ~15, Phase 2: ~9, Phase 3: ~6, Phase 4: ~5).",
+      "suggested_fix": null,
+      "notes": "README.md line 519 matches round-1-fixes.md updated totals."
+    }
+  ]
+}

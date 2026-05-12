@@ -1,0 +1,45 @@
+{
+  "reviewer": "tester",
+  "schema_version": "1.0",
+  "iteration": 2,
+  "status": "ok",
+  "verdict": "needs_revision",
+  "findings": [
+    {
+      "severity": "medium",
+      "category": "test_coverage",
+      "file": "specs/check-convergence-round-aware/README.md",
+      "line": 399,
+      "finding": "Phase 4 test_integration_stage3_round_2_with_carryover still contains ambiguous assertion: 'action=retry (or escalate if iteration counter says cap)'. Round-1 fix T6 required splitting into two deterministic tests with exact iteration inputs. The plan was not updated — an implementer writing this test will pick one branch arbitrarily, leaving the other untested.",
+      "suggested_fix": "Replace the single test description at line 399 with two entries: test_integration_stage3_round_2_all_missing_retry (iteration=2, max=3 -> action='retry') and test_integration_stage3_round_4_all_missing_escalate (iteration=4, max=3 -> action='escalate'). Each must assert exactly one action value with no conditionals.",
+      "notes": "EC8 in tester_edge_cases.json provides concrete test stubs. Partially addressed — the plan acknowledged the issue but did not update the test description."
+    },
+    {
+      "severity": "medium",
+      "category": "test_coverage",
+      "file": "specs/check-convergence-round-aware/README.md",
+      "line": null,
+      "finding": "Phase 2 test descriptions still do not specify hyphenated role names (code-reviewer, red-team-reviewer). An implementer writing these tests will naturally use single-word roles (architect, tester) since the plan does not constrain them, leaving the hyphenated path construction untested in practice.",
+      "suggested_fix": "Add one test in the Phase 2 test list that explicitly names code-reviewer and red-team-reviewer as inputs: test_load_stage3_round_jsons_hyphenated_roles. EC9 in tester_edge_cases.json provides a concrete stub with round-1-code-reviewer.json and round-1-red-team as expected_roles.",
+      "notes": "Not a runtime bug in the loader itself (it constructs, not parses, paths) but a plan-level gap that will allow the regression to slip through unnoticed in any future refactor."
+    },
+    {
+      "severity": "medium",
+      "category": "bug",
+      "file": "specs/check-convergence-round-aware/README.md",
+      "line": 444,
+      "finding": "Decisions made section (lines 444-448) still describes the OLD deprecation-shim approach for evaluate_stage5_two_tier. Phase 3 chose REMOVAL not deprecation, but this section was not updated. Two additional places repeat the stale decision: verification criterion #5 (line 503) says 'emits DeprecationWarning on call', and TDD plan table row for Phase 3 (line 489) says 'deprecation warning'. An implementer following the Decisions made section will build a shim instead of deleting the function.",
+      "suggested_fix": "1. Update Decisions made bullet at line 444 to state: evaluate_stage5_two_tier is REMOVED (not deprecated), per R1-A3/T4/TH5 — shim discards CRITICALs silently and DeprecationWarning is suppressible; zero in-tree callers confirmed. 2. Update verification criterion #5 (line 503) to: grep for 'def evaluate_stage5_two_tier' in check_convergence.py returns 0. 3. Remove 'deprecation warning' from TDD table row for Phase 3 (line 489).",
+      "notes": "Three independent locations contain the stale shim language. Phase 3 body text (lines 315-318) is correct — the inconsistency is only in these three other sections. Risk: implementer reads Decisions made first as canonical, builds shim, skips Phase 3 body fine print."
+    },
+    {
+      "severity": "low",
+      "category": "test_coverage",
+      "file": "specs/check-convergence-round-aware/README.md",
+      "line": 500,
+      "finding": "Verification criterion test count floor is >= 25 but round-1 fixes expanded Phase 1 from ~7 to ~15 tests; round-1-fixes.md line 163 gives updated total as ~52. A floor of 25 is trivially satisfied and does not catch Phase 1 tests being silently skipped.",
+      "suggested_fix": "Update line 500 to: 'Test count >= 50 (Phase 0: ~17, Phase 1: ~15, Phase 2: ~9, Phase 3: ~6, Phase 4: ~5)' — matching the updated phase counts in round-1-fixes.md lines 160-166.",
+      "notes": "No correctness risk; purely a gap in the plan's done-definition that reduces its value as a guard."
+    }
+  ]
+}

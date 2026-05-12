@@ -1,0 +1,49 @@
+{
+  "reviewer": "architect-reviewer",
+  "schema_version": "1.0",
+  "iteration": 3,
+  "status": "ok",
+  "verdict": "needs_revision",
+  "findings": [
+    {
+      "id": "A6-partial",
+      "severity": "medium",
+      "category": "documentation",
+      "file": "tlmforge/specs/check-convergence-round-aware/README.md",
+      "line": 417,
+      "round2_status": "PARTIALLY_FIXED",
+      "finding": "test_integration_stage3_round_2_with_carryover_escalate description is internally self-contradictory. The line opens with 'iteration=3, max_iterations=3 -> action=escalate (cap hit)' then immediately says 'cap_hit triggers AT iteration > max, so iteration=4 -> escalate, iteration=3 -> retry.' The test name ends in _escalate but the text says iteration=3 gives retry. An implementer cannot determine the correct fixture values or assertion from this description alone.",
+      "suggested_fix": "Rewrite line 417 with unambiguous fixture values: 'Fixture uses iteration=4, max_iterations=3 (cap_hit=True because 4>3) -> all 3 files missing -> action=\"escalate\". Documents the boundary: iteration=3 gives retry; iteration=4 gives escalate.'"
+    },
+    {
+      "id": "N2",
+      "severity": "medium",
+      "category": "documentation",
+      "file": "tlmforge/specs/check-convergence-round-aware/README.md",
+      "line": 508,
+      "round2_status": "NEW",
+      "finding": "TDD plan table Phase 3 row still says 'deprecation warning' in the 'What they verify' column. This is a residual from the A3 fix — every other section was updated to say REMOVE/ImportError but this table cell was missed. Creates a local contradiction between the table and the Phase 3 spec section directly above.",
+      "suggested_fix": "Change Phase 3 table cell from '`evaluate_stage5_dual` single-shot semantics; deprecation warning' to '`evaluate_stage5_dual` single-shot semantics; removal of `evaluate_stage5_two_tier` (ImportError test)'"
+    }
+  ],
+  "fixed_findings": [
+    {
+      "id": "A3",
+      "round2_severity": "critical",
+      "status": "FIXED",
+      "evidence": "Scope line 38-39 says REMOVE; architecture diagram lines 141-145 say DELETED; risk audit F3 line 440 says REMOVE; decisions made lines 463-467 say REMOVED not deprecated; verification criterion #5 line 522 says ImportError. All five locations consistent. One residual (TDD table line 508) logged as N2."
+    },
+    {
+      "id": "N1",
+      "round2_severity": "high",
+      "status": "FIXED",
+      "evidence": "Verification criterion #2 line 519: 'Test count >= 45 (Phase 0: ~17, Phase 1: ~15, Phase 2: ~9, Phase 3: ~6, Phase 4: ~5 — post round-1 expansion; total ~52)'. Floor is now meaningful — matches per-phase test lists."
+    },
+    {
+      "id": "A6-retry",
+      "round2_severity": "high",
+      "status": "FIXED",
+      "note": "The retry half of the A6 split is clean: test_integration_stage3_round_2_with_carryover_retry pins iteration=2, max_iterations=3 -> action=retry. Only the escalate half is partially ambiguous (see A6-partial above)."
+    }
+  ]
+}

@@ -1,0 +1,67 @@
+{
+  "reviewer": "tester",
+  "schema_version": "1.0",
+  "iteration": 1,
+  "status": "ok",
+  "verdict": "needs_revision",
+  "findings": [
+    {
+      "severity": "critical",
+      "category": "missing_error_handling",
+      "file": "skills/feature-development/check_convergence.py",
+      "line": null,
+      "finding": "_load_json_safely plan catches JSONDecodeError+OSError but misses UnicodeDecodeError — non-UTF-8 bytes in a truncated file raise ValueError subclass that propagates uncaught and crashes the convergence loop",
+      "suggested_fix": "Catch (json.JSONDecodeError, OSError, ValueError) in _load_json_safely. UnicodeDecodeError is a ValueError subclass; catching ValueError also covers numeric overflow in the JSON parser. Add test_load_json_safely_non_utf8_bytes to Phase 1 test list."
+    },
+    {
+      "severity": "critical",
+      "category": "logic_error",
+      "file": "skills/feature-development/check_convergence.py",
+      "line": 135,
+      "finding": "cap_hit uses `iteration > max_iterations` (existing code line 135) but evaluate_stage5_two_tier uses `iteration >= max_iterations` (line 364) — asymmetric cap semantics mean iteration=3/max=3 does NOT trigger cap in evaluate_convergence but DOES in evaluate_stage5_two_tier. Phase 0 characterization tests must pin both; Phase 3 must resolve intentionally.",
+      "suggested_fix": "Phase 0: add test_evaluate_convergence_cap_hit_exact_boundary (iteration=3, max=3, real CRITICALs -> cap_hit=False) and test_evaluate_stage5_two_tier_cap_asymmetry (iteration=3, max=3, tier-2 CRITICAL -> requires_user_override=True) to explicitly pin both semantics before any code changes."
+    },
+    {
+      "severity": "high",
+      "category": "logic_error",
+      "file": "specs/check-convergence-round-aware/README.md",
+      "line": null,
+      "finding": "evaluate_stage5_dual receives two positional args (not a dict + expected_roles). If it delegates to evaluate_convergence internally and uses max_iterations=3, a CRITICAL finding returns action='retry' instead of action='escalate' — Stage 5 has no retry budget. The plan does not specify the iteration/max_iterations values to pass internally.",
+      "suggested_fix": "evaluate_stage5_dual must pass max_iterations=1 internally (single-shot, no retry) OR translate any non-converged result to action='escalate' regardless of evaluate_convergence output. Add test_evaluate_stage5_dual_no_retry_on_critical to Phase 3."
+    },
+    {
+      "severity": "high",
+      "category": "logic_error",
+      "file": "specs/check-convergence-round-aware/README.md",
+      "line": null,
+      "finding": "The evaluate_stage5_two_tier deprecation shim plan collapses tier-1 trio to one role. Any CRITICAL findings in non-selected tier-1 roles are silently discarded, making the shim return final_converged=True when the original function would return final_converged=False.",
+      "suggested_fix": "Shim must aggregate all tier-1 findings via evaluate_convergence on the full tier1_jsons dict before routing through evaluate_stage5_dual. Add test_evaluate_stage5_two_tier_shim_preserves_tier1_criticals to Phase 3 test list."
+    },
+    {
+      "severity": "high",
+      "category": "missing_error_handling",
+      "file": "skills/feature-development/check_convergence.py",
+      "line": null,
+      "finding": "evaluate_convergence does not validate iteration argument. iteration=0 is schema-invalid (review_schema.json minimum:1) but passes silently, producing iteration=0 in synthetic review dicts and ambiguous user_message output. Non-integer iteration (e.g., string '1') crashes with TypeError.",
+      "suggested_fix": "Add guard at top of evaluate_convergence: if not isinstance(iteration, int) or iteration < 1: raise ValueError. Add test_evaluate_convergence_iteration_zero to Phase 1."
+    },
+    {
+      "severity": "medium",
+      "category": "bug",
+      "file": "specs/check-convergence-round-aware/README.md",
+      "line": null,
+      "finding": "Phase 4 test test_integration_stage3_round_2_with_carryover has ambiguous assertion: 'action=retry (or escalate if iteration counter says cap)'. A test cannot assert two different values. The test description must commit to exact inputs and one expected output.",
+      "suggested_fix": "Split into two deterministic tests: test_integration_stage3_round_2_all_missing_retry (iteration=2, max=3 -> action='retry') and test_integration_stage3_round_4_all_missing_escalate (iteration=4, max=3 -> action='escalate').",
+      "notes": "The carryover-exclusion assertion is orthogonal and should live in its own test using round-1 context."
+    },
+    {
+      "severity": "medium",
+      "category": "test_coverage",
+      "file": "specs/check-convergence-round-aware/README.md",
+      "line": null,
+      "finding": "Phase 2 loader test descriptions use generic role names. All three canonical roles (code-reviewer, red-team, phase-auditor) contain hyphens making round-1-code-reviewer.json ambiguous to any future filename parser. Tests using single-word role names will not exercise the actual path construction.",
+      "suggested_fix": "Phase 2 tests must use real role names (code-reviewer, red-team, architect) to pin path construction with embedded hyphens. No code change needed; test input values change only.",
+      "notes": "Not a runtime bug in the loader since it constructs (not parses) paths — but required to prevent silent regression from any future refactor."
+    }
+  ]
+}
