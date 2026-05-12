@@ -1,5 +1,54 @@
 # Changelog
 
+## 0.5.1 (2026-05-12)
+
+### Fatal-bug fix on 0.5.0 reviewer agents
+
+**Issue:** Three reviewer agents shipped in 0.5.0 — `architect-reviewer`,
+`threat-modeler`, `red-team-reviewer` — were missing `Write` and `Edit` in
+their `tools:` frontmatter. The 0.5.0 lean review architecture REQUIRES
+these agents to write JSON sidecars at round-aware paths. Without `Write`,
+they produce prose-only output. The convergence script then injects
+`reviewer_json_missing` synthetic CRITICALs every round and **never
+converges** — a fatal bug for anyone using Stage 3 plan review or Stage 5
+final audit under 0.5.0.
+
+**Discovered:** during a dogfood test of the 0.5.0 lean review architecture
+itself (DF4 in `specs/check-convergence-round-aware/STATUS.md`). The dogfood
+also empirically attacked the convergence gate and confirmed pre-existing
+forgery surfaces — those are tracked separately as deferred Phase 1 work.
+
+**Fix:** added `Write, Edit` to the `tools:` frontmatter of all three agents.
+The other reviewer agents (`code-reviewer`, `tester`, `ux-reviewer`,
+`phase-auditor`) already had the right tools list.
+
+### Also in 0.5.1
+
+- **18 characterization tests for `check_convergence.py`** at
+  `skills/feature-development/tests/test_check_convergence.py`. These pin
+  every documented branch of `evaluate_convergence` (11 tests) and
+  `evaluate_stage5_two_tier` (6 tests) plus the boundary asymmetry between
+  them (2 tests). They're the safety net for upcoming round-aware loader
+  work (Phase 1+ of the `check-convergence-round-aware` spec).
+- **CHANGELOG.md 0.5.0 corrected** with a "Known gap" preamble that
+  honestly states the round-aware loaders + action enum +
+  `evaluate_stage5_dual` are designed but NOT YET IMPLEMENTED in
+  `check_convergence.py`. They live in Phase 1-4 of the
+  `check-convergence-round-aware` spec.
+
+### Migration
+
+None — pure additive fix. Upgrade unconditionally if you're on 0.5.0.
+
+### Operational note
+
+Plugin marketplace cache may need to refresh before 0.5.1 changes are
+visible to your running Claude Code session. If you see "agent type not
+found" errors for `phase-auditor` or convergence loops that never reach
+zero CRITICALs, your cache is stale.
+
+---
+
 ## 0.5.0 (2026-05-12)
 
 ### ⚠️ Known gap — Phase 1 of check-convergence-round-aware NOT YET SHIPPED
