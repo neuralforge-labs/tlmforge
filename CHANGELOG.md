@@ -2,6 +2,32 @@
 
 ## 0.5.0 (2026-05-12)
 
+### ⚠️ Known gap — Phase 1 of check-convergence-round-aware NOT YET SHIPPED
+
+The 0.5.0 SKILL.md, agent prompts, and reviewer-convergence.md describe a
+round-aware filename convention and stage-aware loaders (`load_stage3_round_jsons`,
+`load_phase_end_round_jsons`, `load_final_audit_jsons`) plus an `action` field
+on the convergence result plus a single-shot `evaluate_stage5_dual` replacing
+the old two-tier function.
+
+**`check_convergence.py` itself does NOT yet implement these.** The 0.5.0
+release contains:
+- ✅ Lean SKILL.md flow (Stages 1-7 with bounded 3-round loops)
+- ✅ Agent prompts updated for round-aware behavior + stage-specific framing
+- ✅ New `phase-auditor` agent file (NOTE: not invocable until plugin cache
+  refreshes — see DF5 in `specs/check-convergence-round-aware/STATUS.md`)
+- ✅ `tester_edge_cases.json` carryover artifact protocol documented
+- ✅ Phase 0 of `check-convergence-round-aware`: 18 characterization tests
+  pinning current behavior
+- ⏳ Phases 1-4 of `check-convergence-round-aware` DEFERRED (round-aware
+  loaders, defensive hardening, single-shot dual). See spec dir.
+
+**Security implication of the deferral:** As shipped today, the convergence
+gate is forgeable by anything that can write to `agent_verification/` (empirically
+confirmed at Stage 5 red-team review). The defenses are designed and spec'd
+(see `specs/check-convergence-round-aware/`) but not yet code. Phase 1
+implementation lands those defenses.
+
 ### Lean review architecture
 
 Major redesign of the convergence loop to reduce subagent spawns by ~75-99% per feature. Driven by Claude Max quota pressure: the prior architecture ran ~145 subagent spawns per typical 5-phase feature (≈31 of them on opus), the single biggest line item being the tester Stop hook firing opus on every save.

@@ -1,0 +1,73 @@
+{
+  "reviewer": "red-team-reviewer",
+  "schema_version": "1.0",
+  "iteration": 1,
+  "status": "ok",
+  "verdict": "do_not_ship",
+  "findings": [
+    {
+      "severity": "critical",
+      "category": "security",
+      "file": "tlmforge/skills/feature-development/check_convergence.py",
+      "line": 113,
+      "finding": "Convergence gate forgery: a reviewer JSON with verdict=approve and findings=[] converges silently (line 113-117 lazy-empty approve branch). Empirically confirmed: writing three trivial {verdict:approve, findings:[]} JSONs makes evaluate_convergence return converged=True with action=advance. Anyone with write access to specs/<feature>/agent_verification/ (including a prompt-injected reviewer agent) can manufacture convergence with zero genuine review. Phase 0 tests pin this exploitable behavior as expected at test_evaluate_convergence_all_approve and test_evaluate_convergence_lazy_empty_approve_verdict. The master plan defers the fix (_load_json_safely + _validate_review_shape + iteration cross-check + role allowlist) to Phases 1-2 which have NOT shipped.",
+      "suggested_fix": "Ship Phase 1 before any 0.5.0 marketplace release. Add _validate_review_shape rejecting missing-key JSONs, iteration cross-check via _load_json_safely(path, expected_iteration), role allowlist, and is_relative_to containment. Stronger: HMAC-sign reviewer JSONs with a per-session key so arbitrary filesystem writes cannot forge them. Until Phase 1 lands, add a README WARNING that the script must not be used as a security gate."
+    },
+    {
+      "severity": "high",
+      "category": "security",
+      "file": "tlmforge/skills/feature-development/check_convergence.py",
+      "line": 100,
+      "finding": "Schema-absent JSON bypass: empty {} dicts per reviewer converge silently. evaluate_convergence reads .get('status', OK), .get('verdict', 'approve'), .get('findings', []) — an empty dict satisfies all three with the most-permissive defaults. Empirically: {'architect-reviewer': {}, 'tester': {}, 'threat-modeler': {}} returns converged=True. A reviewer agent that crashes and emits {} is silently counted as approved. Fix deferred to Phase 1 (R1-TH2 _validate_review_shape).",
+      "suggested_fix": "In _load_json_safely after json.load, validate required keys ['reviewer', 'schema_version', 'iteration', 'verdict', 'findings'] are present. Missing key -> return None, treated as reviewer_json_missing meta CRITICAL."
+    },
+    {
+      "severity": "high",
+      "category": "security",
+      "file": "tlmforge/skills/feature-development/check_convergence.py",
+      "line": 51,
+      "finding": "Iteration cross-check absent: a reviewer JSON's internal 'iteration' field is never compared with the consumer's round number. Empirically: a JSON with 'iteration': 99 passed to evaluate_convergence(iteration=1) converges normally. An attacker (or an agent that re-uses a stale converged round-1 JSON) can replay approve verdicts across rounds. Fix deferred to Phase 1 (R1-TH1 expected_iteration in _load_json_safely).",
+      "suggested_fix": "Phase 1: loaders pass expected_iteration to _load_json_safely; mismatch returns None which evaluate_convergence treats as reviewer_json_missing. Document that iteration cross-check is a load-time invariant, not an evaluate-time one."
+    },
+    {
+      "severity": "high",
+      "category": "security",
+      "file": "tlmforge/specs/check-convergence-round-aware/README.md",
+      "line": 32,
+      "finding": "Path traversal surface in planned loaders. load_stage3_round_jsons / load_phase_end_round_jsons / load_final_audit_jsons splice user-controlled feature_dir and role strings into filesystem paths. The plan calls for role allowlist and is_relative_to containment in Phase 1, but Phases 1-2 have not shipped. As soon as Phase 2 lands without Phase 1, an attacker passing feature_dir='../../etc' or role='../passwd' escapes the specs tree. Surface doesn't exist in shipped code yet but is imminent.",
+      "suggested_fix": "Land Phase 1 (role allowlist + path.resolve().is_relative_to(Path(feature_dir).resolve())) BEFORE Phase 2. Do not let Phase 2 ship without Phase 1's hardening as a prerequisite gate."
+    },
+    {
+      "severity": "medium",
+      "category": "security",
+      "file": "tlmforge/skills/feature-development/check_convergence.py",
+      "line": 93,
+      "finding": "All-skipped reviewer set converges. If every reviewer reports status='skipped' (transient infra failure, all API keys expired, denial-of-service on agents), evaluate_convergence emits warnings and converges with real_critical_count = meta_critical_count = 0. Empirically confirmed. Not addressed in the master plan's defenses list.",
+      "suggested_fix": "Require at least one non-skipped reviewer to produce a non-empty findings list OR an explicit approve verdict backed by positive findings count. Block convergence if all reviewers are skipped."
+    },
+    {
+      "severity": "medium",
+      "category": "security",
+      "file": "tlmforge/skills/feature-development/tests/test_check_convergence.py",
+      "line": 22,
+      "finding": "sys.path.insert at import time in the test file. Combined with the duplicate check_convergence.py copies (one in tlmforge/skills/feature-development/, one in ~/.claude/skills/feature-development/ — DF2 in spec_audit, byte-identical today, mirror-managed), Python's import cache will resolve to whichever copy is first imported in a pytest session. As soon as Phase 1 lands in only one of the two copies (almost certain — the plan does not require sync), behavior depends on import order. Bug surfaces as 'why does CI differ from local'.",
+      "suggested_fix": "Replace sys.path.insert with a proper conftest.py + pyproject.toml [tool.pytest.ini_options] pythonpath setting. Better: resolve DF2 in this commit (delete one copy or symlink them) so the duplicate-script footgun is gone before Phase 1 introduces divergence."
+    },
+    {
+      "severity": "low",
+      "category": "security",
+      "file": "tlmforge/skills/feature-development/check_convergence.py",
+      "line": 240,
+      "finding": "evaluate_stage5_two_tier still present with off-by-one cap-check (line 364: iteration >= max_iterations) vs evaluate_convergence (line 135: iteration > max_iterations). The Phase 0 tests pin both semantics simultaneously (test lines 209 vs 223). Any caller importing the two-tier function today inherits the off-by-one. Spec audit confirmed zero in-tree callers; out-of-tree exposure unknown. Removal deferred to Phase 3.",
+      "suggested_fix": "If a 0.5.0 marketplace publish is planned before Phase 3, do the Phase 3 removal now (1-line del + 6 test deletions). Otherwise low-risk to wait."
+    },
+    {
+      "severity": "nit",
+      "category": "security",
+      "file": "tlmforge/skills/feature-development/tests/__init__.py",
+      "line": 1,
+      "finding": "Empty __init__.py forces pytest into package import mode, which compounds the sys.path.insert footgun above. Pure hygiene issue.",
+      "suggested_fix": "Drop __init__.py, use rootdir-based conftest.py + pyproject pytest config."
+    }
+  ]
+}
