@@ -6,19 +6,36 @@
 
 ## 0. Per-stage expected reviewer roles
 
-The convergence rule's `expected_roles` list varies BY STAGE. SKILL.md and this sub-doc must agree (enforced by `test_expected_roles_consistent.py` in Phase 2).
+The convergence rule's `expected_roles` list varies BY STAGE. SKILL.md and this sub-doc must agree.
 
-| Stage | Tier | Default expected reviewer roles | Conditional / optional |
+| Stage | Iteration model | Default expected reviewer roles | Conditional / optional |
 |---|---|---|---|
-| Stage 3 (plan review, before code) | — | `architect-reviewer`, `tester`, `threat-modeler` | `ux-reviewer` (UI features only); `general-purpose` (cross-cutting concerns only) |
-| Stage 5 (re-review on diff) — tier 1 | trio + Gemini | `architect-reviewer`, `code-reviewer`, `tester` | `gemini` if `ai_review_json.sh` exits 0 (status:ok); excluded if exit 2 (status:skipped) |
-| Stage 5 (re-review on diff) — tier 2 | red-team | `red-team-reviewer` | none — fires once per feature, only after tier-1 converges |
+| Stage 3 (plan review) | bounded 3-round loop, same reviewers across rounds | `architect-reviewer`, `tester`, `threat-modeler` | `ux-reviewer` (only if plan describes UI work) |
+| Stage 4 phase-end (per-phase verification) | bounded 3-round loop per phase | `code-reviewer`, `tester`, `phase-auditor` | `ux-reviewer` (only if phase diff contains UI files) |
+| Stage 5 (final audit) | **single shot, no iteration** | `red-team-reviewer` [opus], `architect-reviewer` [sonnet] | none |
 
-**Why `code-reviewer` is excluded from Stage 3** — at plan time there is no code, so its TDD/pattern/security-on-impl strengths don't apply. Including it produced redundant findings (overlap with architect's design coverage) or speculative ones (about not-yet-written code). It runs at Stage 5 where it earns its keep, and via the Stop hook on every file edit.
+**Stage 3 — why the trio:**
+- `architect-reviewer`: would a senior L8/E8 ship this design?
+- `tester`: edge cases + emits the `tester_edge_cases.json` carryover artifact at Round 1
+- `threat-modeler`: design-time trust-boundary violations
 
-**Why `red-team-reviewer` is Stage 5 tier-2 only** — finds concrete file:line exploits (IDOR, TOCTOU, escape sequences) that need real code to evaluate. Single-shot per feature: noise discipline matters more than retry capacity.
+**Stage 4 phase-end — why these four:**
+- `code-reviewer`: TDD compliance, patterns, security on the phase diff
+- `tester`: re-runs the suite and cross-checks `phase-N-evidence.md` numbers; verifies edge cases from `tester_edge_cases.json` are covered at the right layer
+- `phase-auditor`: promise-vs-delivered for the phase spec (scope, tests, rollback)
+- `ux-reviewer` (conditional): accessibility + platform conventions on UI files in the phase diff
 
-**Why `threat-modeler` is Stage 3 only** — finds design-time trust-boundary violations and channel-confidentiality assumptions. Cheap to fix at design time, expensive after. By Stage 5 the design is locked.
+**Stage 5 — why two single-shot agents:**
+- `red-team-reviewer` [opus]: adversarial impl-time attack on the full diff. Single shot — the one opus invocation per feature where deep reasoning earns its keep.
+- `architect-reviewer` [sonnet]: holistic + cross-phase design check. NOT a re-derivation of design from scratch — focuses on inter-phase consistency, accumulated design debt, irreversible operations that slipped through.
+
+**Stop hooks: removed entirely.** No tester/code-reviewer/ux-reviewer/process-compliance Stop hooks fire after every save anymore. Review happens at the gates above, or via main-agent self-review in the Light path (defined in `~/.claude/CLAUDE.md`).
+
+**Why `code-reviewer` is NOT at Stage 3 or Stage 5** — at Stage 3 there's no code; at Stage 5 every phase's code has already been reviewed by phase-end code-reviewer at Stage 4. Cross-phase code-quality concerns surface via `architect-reviewer`'s Stage 5 holistic pass.
+
+**Why `threat-modeler` is Stage 3 only** — design-time trust assumptions are cheap to fix at design time; by impl time, red-team-reviewer takes the adversarial seat.
+
+**Why `phase-auditor` is Stage 4-only** — its job (promise-vs-delivered) is phase-bound. At Stage 5 the equivalent role is implicitly "feature-as-a-whole vs original master plan," which architect-reviewer handles holistically.
 
 ---
 
@@ -136,16 +153,21 @@ Schema lives in `~/.claude/skills/feature-development/review_schema.json`. The b
 
 ---
 
-## 2. Prompt template addition (Stage 3 + Stage 5)
+## 2. Prompt template addition (all stages)
 
-The Stage 3 / Stage 5 launch prompt template gains the following block. Place it **immediately after** the role-introduction line (`You are reviewing the <FEATURE> design...`) and **before** the role-specific checks. Putting it at the TOP, not the bottom, ensures the JSON instruction is read before the agent gets deep into review work.
+Every reviewer launch prompt — Stage 3, Stage 4 phase-end, Stage 5 — must include the structured-output block. Place it **immediately after** the role-introduction line and **before** the role-specific checks. The output path differs per stage; the JSON shape doesn't.
 
 ```
 === STRUCTURED OUTPUT — REQUIRED ===
 
 In addition to your prose markdown report, you MUST use the Write tool to
-create a second file:
-  specs/<feature>/agent_verification/<your_role>_review.json
+create a second file at the path specified by your stage:
+
+  Stage 3 Round 1:          specs/<feature>/agent_verification/round-1-<your_role>.json
+  Stage 3 Round 2/3:        specs/<feature>/agent_verification/round-N-<your_role>.json
+  Stage 4 phase-end R1:     specs/<feature>/phase-N-verification/<your_role>.json
+  Stage 4 phase-end R2/3:   specs/<feature>/phase-N-verification/round-N-<your_role>.json
+  Stage 5 (single shot):    specs/<feature>/agent_verification/final_audit_<your_role>.json
 
 This JSON file must validate against the schema below (copy exactly):
 
@@ -160,9 +182,31 @@ Top-level verdict is decorative — convergence is driven by per-finding severit
 
 If you do not emit this JSON file, the orchestrator will inject a synthetic
 finding `severity=critical, category=meta, finding=reviewer_json_missing` for
-your slot. This blocks convergence and triggers a re-launch.
+your slot. At Stages 3 and 4 (iterative), this triggers a re-launch in the
+next round. At Stage 5 (single-shot), this blocks the final audit until you
+emit a valid JSON.
 
 === END STRUCTURED OUTPUT REQUIREMENT ===
+```
+
+### Round-2/3 prompt addition (Stage 3 and Stage 4 phase-end iteration)
+
+When iteration > 1, the launch prompt MUST also include this block to enforce verify-your-findings framing:
+
+```
+=== ITERATION FRAMING (round N > 1) — REQUIRED ===
+
+Your prior-round findings: <prior_round_findings_path>
+The fixes Claude made:     <fixes_path>
+Updated plan / diff:       <plan-or-diff-path>
+
+For each of YOUR prior findings: verdict FIXED / PARTIALLY / NOT_FIXED
+with file:line evidence in the updated artifact.
+
+Add NEW findings only if you genuinely missed something in the prior round
+— NEW signal, not re-derivation of the same finding from a different angle.
+
+=== END ITERATION FRAMING ===
 ```
 
 ---
@@ -203,19 +247,51 @@ If iteration > 3 and not converged, surface to user a structured message that di
 1. Write to `<final-path>.tmp`
 2. `mv` to `<final-path>` only after writing is complete
 
+### Carryover artifacts (Stage 3 → Stage 4)
+
+These are NOT review JSON sidecars — they're inputs the next stage reads to avoid re-derivation:
+
+| Artifact | Produced by | Consumed by | Purpose |
+|---|---|---|---|
+| `agent_verification/tester_edge_cases.json` | tester at Stage 3 Round 1 | main Claude at Stage 4 (scenario seed for TDD); tester at Stage 4 phase-end (coverage validation) | Avoid re-enumerating edge cases 3× across stages |
+| `agent_verification/round-N-fixes.md` | main Claude after each Stage 3 round | reviewers at Stage 3 round N+1 (verify-your-findings) | Tells round N+1 reviewers what changed and why |
+| `phase-N-verification/round-N-fixes.md` | main Claude after each phase-end round | reviewers at phase-end round N+1 | Same pattern as Stage 3 fixes |
+| `phase-N-state.md` (existing) | main Claude at phase start | Stage 4.6 phase-end agents (anchors the diff baseline) | Records `git_sha:` so reviewers diff from the right commit |
+
+**Schema for tester_edge_cases.json:**
+```json
+{
+  "schema_version": "1.0",
+  "feature": "<feature-slug>",
+  "produced_by": "tester-stage-3-round-1",
+  "edge_cases": [
+    {
+      "id": "EC1",
+      "title": "<short>",
+      "surface": "<file or area>",
+      "expected": "<expected behavior>",
+      "test_stub": "<runnable code or pseudocode>",
+      "source": "design" | "impl"   // "design" set by Stage 3 tester; "impl" set by main Claude if scenario surfaced during impl
+    }
+  ]
+}
+```
+
+Main Claude UPDATES this file in place during Stage 4 — when implementation surfaces a scenario Stage 3 missed, append with `source: "impl"`. Phase-end tester reads the full set (design + impl).
+
 This prevents the convergence script from reading a half-written JSON.
 
 ---
 
-## 4. Stage 5 skip rule (tightened — F9 from spec audit)
+## 4. Stage 5 — always single-shot, no skip rule
 
-Stage 5 re-review fires when **any** of:
-- Any Stage 3 verdict was `needs_revision` or `do_not_ship`
-- Any Stage 3 finding had `severity: "critical"`
-- The implementation phases changed substantive behavior (defined in Phase 2 follow-up — tester EC-9 deferred)
+Stage 5 in the lean architecture is **always two single-shot agents** (red-team-reviewer + architect-reviewer), no iteration, no skip rule. Cost is bounded by design:
+- 1 opus invocation (red-team) + 1 sonnet invocation (architect) per feature
+- No retry/convergence loop at this stage — the iterative loops already ran at Stage 3 and Stage 4 phase-end
 
-Stage 5 is skipped only for pure-doc / pure-comment changes. Document the skip explicitly in `agent_verification/SUMMARY.md`:
-> "No re-review required — first-pass approved with no CRITICAL findings AND only documentation lines changed in implementation. Stage 5 skipped."
+If either Stage 5 agent finds CRITICALs, the user is escalated via `agent_verification/FINAL_ESCALATION.md` and decides next steps (fix and re-run Stage 5 as a fresh single-shot, accept residual risk, or abandon). There is no automatic re-launch.
+
+The previous skip-rule logic (Stage 5 fires only if Stage 3 was needs_revision or had CRITICALs) is obsolete — Stage 5 now does work that no earlier stage covers (cross-phase holistic + adversarial impl), so it always fires.
 
 ---
 
