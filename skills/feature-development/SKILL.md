@@ -19,57 +19,78 @@ this recipe — read it once if you've never done a feature this way.
 
 ## When to use
 
-**Default: ON.** If the request changes behavior, touches data, or
-crosses 2+ files, this skill applies. Only skip for typos, single-line
-logic fixes, and config-only changes with zero blast radius.
+This skill is invoked **only after the classification gate** (defined in
+`~/.claude/CLAUDE.md`'s "Feature-Development Skill" section) routes a task to
+the **Deep** path. The decision is made by Claude main + user confirmation
+using semantic signals (security surface, persistent state, cross-module
+scope, customer-facing impact, user language) — NOT hardcoded file paths.
 
-When in doubt, apply it. 5 minutes of planning beats hours of debugging
-a feature you shipped and broke.
+If you're invoked, you're on the Deep path. Light/Minimal tasks never reach
+this skill — they're handled inline by the main agent with TDD + full test
+suite + self-review.
 
-### Three intensities
+### Deep path — what this skill does (this whole document)
 
-User-driven first, agent-driven second. **Most Light/Minimal invocations
-should come from the user saying so**, not from agent self-classification.
+The Deep path runs the full 7-stage recipe: spec audit → master plan →
+bounded 3-round plan review → phase-gated TDD execution with phase-end
+verification → dual single-shot final audit → live verification → status
+dashboard.
 
-| Intensity | When | Artifact ceiling |
-|---|---|---|
-| **Minimal** | User said "just do it" / "be quick"; OR change touches ≤2 files INCLUDING tests, no schema impact, no migration, no shared state, no rollout state | TDD only. No plan docs. Stop hooks (code-reviewer, tester) catch issues. |
-| **Light** | Change touches ≤5 files, isolated module/endpoint, no persistent schema impact, no data migration, no rollout state | Brief plan in conversation (NOT a separate file) + ONE phase-evidence.md proving it works. No spec audit, no master README, no multi-agent review, no operator scripts. |
-| **Full** (default for everything else) | Multi-surface change, persistent data impact, migration, third-party integration, security/auth/encryption, irreversible operation, OR user said "be thorough" / "fool proof" / "no regressions" | All 7 stages. Full artifact set. |
+### When NOT in this skill (Light/Minimal — handled in CLAUDE.md)
 
-**Decision rule (apply in order):**
-1. User said "be thorough" or named the encryption-style discipline → Full.
-2. User said "just do it" / "quick fix" / "minimal" → Minimal.
-3. Touches data migration, irreversible op, auth, payments, PII, schema → Full.
-4. Touches >5 files including tests → Full.
-5. Otherwise → Light.
+If you're reading this because you were unsure: ask the classification gate
+first. The user picks Light or Deep before any planning artifacts get
+created. Producing `spec_audit.md` and `README.md` for a task the user
+wanted handled inline is the failure mode this triage prevents.
 
-This is a hard ceiling, not a soft default. **Do not produce a spec_audit.md
-or master plan README.md for a Light or Minimal task.** That's the failure
-mode this triage prevents.
+### Mid-task escalation
+
+If a task started as Light/Minimal and discovers mid-implementation that it
+expanded into Deep territory (e.g., found a security surface, scope exceeded
+~5 files, schema change appeared), the main agent **must pause and re-ask
+the classification gate**. The user may escalate to Deep, at which point
+this skill takes over from Stage 1.
 
 ---
 
 ## The recipe at a glance
 
 ```
-Stage 1: Spec audit                    →  specs/<f>/spec_audit.md
+Stage 1: Spec audit (main Claude)            →  specs/<f>/spec_audit.md
+         ↓  conditional gate (only if [GATE-BLOCKING] questions / TIER1 keywords)
+Stage 2: Master plan (main Claude)           →  specs/<f>/README.md
+         ↓  conditional gate (only if plan introduces unapproved decisions)
+Stage 3: Plan review — bounded 3-round loop
+   R1: architect + tester + threat-modeler   →  agent_verification/round-1-<reviewer>.{md,json}
+         (+ ux-reviewer if UI in scope)        + tester_edge_cases.json (carryover)
+         ↓  main Claude fixes plan + writes round-1-fixes.md
+   R2: SAME reviewers VERIFY their R1 findings → round-2-<reviewer>.{md,json}
+         ↓  main Claude fixes again if needed
+   R3: same — final verdict                  →  round-3-<reviewer>.{md,json}
+         ↓  if still NotOK → ESCALATION.md + ask user
+Stage 4: Phase execution (per phase, with TDD + full-suite + 0 regressions)
+         Main Claude implements with TDD:
+            - reads tester_edge_cases.json as scenario seed
+            - assigns each scenario to a layer (unit/integration/E2E)
+            - writes tests FIRST → RED → impl → GREEN + 0 regressions
+            - captures test-run output into phase-N-evidence.md
+         Phase-end verification (3 agents + 1 conditional, max 3 rounds):
+            code-reviewer + tester + phase-auditor [+ ux-reviewer if UI]
+                                                  →  specs/<f>/phase-N-verification/<reviewer>.{md,json}
+         ↓  loop per phase
+Stage 5: Final audit (2 single-shot agents, parallel)
+   red-team-reviewer (adversarial impl)      →  agent_verification/final_audit_red_team.{md,json}
+   architect-reviewer (holistic cross-phase) →  agent_verification/final_audit_architect.{md,json}
+         ↓  if CRITICALs → FINAL_ESCALATION.md + ask user
+Stage 6: Live verification + tooling          →  specs/<f>/E2E_VERIFICATION.md, ROLLOUT_PLAN.md,
+                                                  scripts/<feature>/{...,README.md}
          ↓
-Stage 2: Master plan + phases          →  specs/<f>/README.md
-         ↓ user approves
-Stage 3: Multi-agent review            →  specs/<f>/agent_verification/*.md
-         ↓ all CRITICAL/HIGH addressed
-Stage 4: Phase-gated execution         →  specs/<f>/phase-N-{spec,verify,evidence,summary}.md
-         ↓  ↑ loop per phase
-Stage 5: Re-run agent review           →  specs/<f>/agent_verification/SUMMARY.md (verdict upgrade)
-         ↓
-Stage 6: Live verification + tooling   →  specs/<f>/E2E_VERIFICATION.md, specs/<f>/ROLLOUT_PLAN.md,
-                                          scripts/<feature>/{...,README.md}
-         ↓
-Stage 7: STATUS.md                     →  specs/<f>/STATUS.md (executive dashboard for reviewers)
+Stage 7: STATUS.md                            →  specs/<f>/STATUS.md (executive dashboard)
 ```
 
-You may not skip ahead. Each stage gates the next.
+You may not skip ahead. Each stage gates the next. Stop hooks are NOT involved
+— review happens at the well-defined gates above (Stage 3 rounds, Stage 4
+phase-end, Stage 5 final).
 
 ---
 
@@ -140,18 +161,32 @@ why it's a non-issue for this feature:
 
 Padding with manufactured LOW findings is worse than fewer real ones.
 
-### MANDATORY GATE — do not continue past this point in the same turn
+### Stage 1 → Stage 2 gate (conditional — only when human input is needed)
 
-After writing `spec_audit.md`, you MUST:
+After writing `spec_audit.md`, evaluate whether the audit contains **CRITICAL open questions
+that only the user can answer** — product decisions, scope choices, or irreversible tradeoffs
+that are not derivable from the codebase or the task.
 
-1. End your message with the literal sentinel: `SPEC_AUDIT_COMPLETE — awaiting go-ahead before drafting master plan`
-2. If TLM is active in the project, call `tlm_set_phase("awaiting_spec_audit_approval")` before sending the message.
-3. Do NOT write `README.md` (master plan) or any phase docs until the user has replied with explicit approval ("approved", "go", "ship it", "looks good", or substantive direction on the open questions).
+The gate is structural, not a judgment call. In the spec audit's "Open questions for the user"
+section, tag every question as `[GATE-BLOCKING]` or `[INFORMATIONAL]`:
 
-This gate exists because Auto Mode permits chaining stages in a single
-turn. Without a hard turn boundary, the user never sees the audit before
-implementation lands. The sentinel makes the gate machine-checkable —
-hooks or reviewers can verify it fired.
+- `[GATE-BLOCKING]` — a fork in the road only the user can resolve (scope, irreversible tradeoff,
+  product decision). Default to this tag when uncertain.
+- `[INFORMATIONAL]` — a risk Claude will address in the plan; no user decision needed.
+
+**The gate fires if ANY question is tagged `[GATE-BLOCKING]`, OR if the audit mentions any
+TIER1 keyword** (auth, payment, encryption, PII, migration, IAM, RBAC, token, password) —
+regardless of question tags, because misclassification on TIER1 paths is expensive.
+
+**If gate fires:**
+End your message with: `SPEC_AUDIT_COMPLETE — [GATE-BLOCKING] questions require your input: [list them]`
+Do NOT proceed to Stage 2 until the user replies.
+
+**If gate does not fire (no `[GATE-BLOCKING]` questions, no TIER1 keywords):**
+Proceed directly to Stage 2 in the same turn. The user approved the goal; agents own quality.
+
+The asymmetry is intentional: a false positive (unnecessary gate) costs one round-trip. A false
+negative (skipped gate on a product decision) can cost a wasted feature.
 
 ---
 
@@ -218,141 +253,231 @@ How to prove the feature works. Measurable, not subjective.
 - Sub-phases (`5b`, `5c`, `5d`) get added LATER when post-rollout review
   finds gaps. Don't pre-allocate them.
 
-### MANDATORY GATE — do not continue past this point in the same turn
+### Stage 2 → Stage 3 gate (conditional — only when plan introduces new decisions)
 
-After writing `README.md` (master plan), you MUST:
+After writing `README.md`, evaluate whether the plan introduces **decisions or tradeoffs the
+user hasn't already approved** — scope changes, architectural choices that weren't in the
+original brief, irreversible operations that need explicit sign-off.
 
-1. End your message with the literal sentinel: `MASTER_PLAN_COMPLETE — awaiting approval before launching agent reviews`
-2. If TLM is active, call `tlm_set_phase("awaiting_plan_approval")`.
-3. Do NOT launch any reviewer agents and do NOT write any code until the user replies with explicit approval.
+**If yes (plan contains new unapproved decisions):**
+End your message with: `MASTER_PLAN_COMPLETE — new decisions in the plan need your sign-off: [list them]`
+Wait for explicit approval before launching agents.
 
-Silence is not approval. The user must affirmatively say go.
+**If no (plan faithfully executes the already-approved intent):**
+Launch Stage 3 agents immediately in the same turn. Agents are the gate — human doesn't need
+to approve what they already approved. The convergence loop handles quality from here.
+
+The only other reason to gate: the plan includes an **irreversible production operation**
+(data migration, schema drop, key destruction). Gate those explicitly regardless of prior approval.
 
 ---
 
-## Stage 3 — Multi-agent review (BEFORE any code)
+## Stage 3 — Plan review (bounded 3-round loop)
 
-**Goal:** Independent verification that the plan is sound, by reviewers
-who didn't watch you write it.
+**Goal:** Independent verification that the plan is sound, by reviewers who
+didn't watch you write it. **Hard cap: 3 rounds.** If unresolved findings
+remain after round 3, escalate to the user — do NOT spin indefinitely.
 
-**Structured-output requirement:** Every reviewer must emit a JSON
-sidecar (`<role>_review.json`) alongside the prose markdown report. The
-JSON validates against `~/.claude/skills/feature-development/review_schema.json`.
-The agent prompt addition (the literal text to insert near the top of the
-launch prompt template) and the schema content are in
-[`reviewer-convergence.md`](reviewer-convergence.md). Embed that prompt
-block in every reviewer's launch prompt — without it, the orchestrator
-will inject a synthetic `reviewer_json_missing` finding for that role.
+**Structured-output requirement:** Every reviewer emits a JSON sidecar
+(`<role>_review.json`) alongside the prose markdown report. The JSON validates
+against `~/.claude/skills/feature-development/review_schema.json`. The agent
+prompt addition (literal text to insert into every launch prompt) is in
+[`reviewer-convergence.md`](reviewer-convergence.md). Without it, the
+convergence script injects a synthetic `reviewer_json_missing` finding for
+that role.
 
-Launch **3 review agents in parallel** (default) by sending a single assistant
-message that contains multiple `Agent` tool calls. The Agent tool takes
-`subagent_type`, `description`, `prompt`, and `model`. **First-round agents
-use `model="opus"`** (no version pin) — this is the fresh-eyes pass where
-Opus's reasoning depth pays off. Iterative re-runs (when fixing specific findings)
-use `model="sonnet"` to keep the loop fast; haiku misses subtleties throughout.
+**Model selection:** All Stage 3 reviewer subagents use `model="sonnet"`
+(no version pin). Opus is reserved for `red-team-reviewer` at Stage 5 only.
+Sonnet handles plan-level reasoning at this surface; iterating with sonnet
+is what makes the 3-round loop affordable.
 
-```
-Agent(subagent_type="tlmforge:architect-reviewer", model="opus", description="...", prompt=<full prompt>)
-Agent(subagent_type="tlmforge:tester",             model="opus", description="...", prompt=<full prompt>)
-Agent(subagent_type="tlmforge:threat-modeler",    model="opus", description="...", prompt=<full prompt>)
-Agent(subagent_type="tlmforge:ux-reviewer",        model="opus", description="...", prompt=<full prompt>)   # only for UI changes
-Agent(subagent_type="tlmforge:general-purpose",    model="opus", description="...", prompt=<full prompt>)   # only for cross-cutting concerns
-```
+### Default Stage 3 roster
 
-Default Stage 3 roster (3 reviewers — `architect-reviewer + tester + threat-modeler`):
 - `architect-reviewer` — would a senior L8/E8 architect ship this design?
 - `tester` — what edge cases / race conditions / failure modes does the design plan to handle?
-- `threat-modeler` — what does the design ASSUME that an attacker can violate? (trust boundaries, channel confidentiality, auth/authz assumptions, third-party trust, design-level injection surfaces)
+  Also emits the carryover artifact `tester_edge_cases.json` at round 1 (see "Carryover artifacts" below).
+- `threat-modeler` — what does the design ASSUME that an attacker can violate?
 
-Conditional reviewers:
-- `ux-reviewer` — only when UI changes are involved
-- `general-purpose` — only when there are cross-cutting concerns (cost, deploy, doc accuracy) the trio doesn't cover
+**Conditional reviewer:**
+- `ux-reviewer` — only when the plan describes UI work
 
-**`code-reviewer` is deliberately NOT launched at Stage 3** — there is no code yet, so its TDD/pattern/security-on-impl strengths are wasted at plan time. It runs at Stage 5 (re-review on diff) and via the Stop hook on file changes. See `reviewer-convergence.md` §1 for the per-stage expected-roles table.
+**Not at Stage 3:** `code-reviewer` (no code yet — runs at Stage 4 phase-end);
+`red-team-reviewer` (impl-only — runs at Stage 5); `phase-auditor` (phase-bound
+— runs at Stage 4 phase-end).
 
-These are independent — emit them in the same response, in parallel
-tool calls, so they run concurrently. Do not chain them.
+### Round 1 — cold review (parallel)
 
-Each subagent prompt must be self-contained (see template below). The
-agents have not seen this conversation; brief them fully.
+Emit all reviewer subagents in a single assistant message with multiple
+parallel `Agent` tool calls. The agents haven't seen this conversation — brief
+them fully via launch prompt. Each agent reads `spec_audit.md` + `README.md`
+and writes `agent_verification/round-1-<reviewer>.{md,json}`.
 
-### Agent prompt template (copy-paste, adapt the placeholders)
+```
+Agent(subagent_type="tlmforge:architect-reviewer", model="sonnet", description="...", prompt=<round-1 launch prompt>)
+Agent(subagent_type="tlmforge:tester",             model="sonnet", description="...", prompt=<round-1 launch prompt>)
+Agent(subagent_type="tlmforge:threat-modeler",     model="sonnet", description="...", prompt=<round-1 launch prompt>)
+# + Agent(subagent_type="tlmforge:ux-reviewer", model="sonnet", ...) only if UI scope
+```
+
+### Round 1 launch prompt template (copy-paste, fill placeholders)
 
 ```
 You are reviewing the <FEATURE> design before any code is written.
+This is ROUND 1 (cold review).
 
 Working tree: <repo path>
 Master plan:  specs/<feature>/README.md
 Spec audit:   specs/<feature>/spec_audit.md
-Surrounding context I've already considered: <1-2 lines>
+Iteration: 1
 
-Your job: find flaws I haven't. Be hostile. Assume I'm wrong about
-something.
+Your job: find flaws I haven't. Be hostile. Assume I'm wrong about something.
 
-Specifically check:
+Specifically check (apply your role-specific lens):
 1. Does any phase have a hidden irreversible step?
-2. Is there a code path the plan doesn't mention that this change
-   affects? (Read the actual code, don't just trust the plan.)
+2. Is there a code path the plan doesn't mention that this change affects?
 3. What happens under: empty input, partial failure, concurrent access,
-   timeout, quota exhaustion, malformed data, the user being on an old
-   client?
-4. <Feature-specific risks: e.g. "what if KMS is down for 5 minutes
-   during shadow rollout?">
+   timeout, quota exhaustion, malformed data, old client?
+4. <Feature-specific risks>
 5. Is the rollback procedure for each phase actually executable in 5
    minutes by an oncall who has never seen this code?
 
 Output format: severity-tagged findings (CRITICAL / HIGH / MEDIUM / LOW),
-each with: where it shows up (file:line), why it matters, recommended
-fix. End with an overall verdict: APPROVE / NEEDS_REVISION / DO_NOT_SHIP.
+each with: where it shows up (file:line), why it matters, recommended fix.
+Overall verdict: approve / needs_revision / do_not_ship.
 
-Save your report to: specs/<feature>/agent_verification/<your_role>_review.md
-Then report back a 5-line summary so I can decide what to fix.
+Save BOTH:
+- agent_verification/round-1-<your-role>.md (prose)
+- agent_verification/round-1-<your-role>.json (per the JSON schema in reviewer-convergence.md)
+
+[For tester ONLY] Also emit agent_verification/tester_edge_cases.json — the
+carryover artifact. Every CRITICAL/HIGH edge case you raise gets a corresponding
+entry. See tester.md "Stage 3 Round 1" section for the schema.
 ```
 
-### Disposition rules (non-negotiable)
+### After Round 1 — main Claude fixes
 
-| Severity | Action |
-|---|---|
-| CRITICAL | Fix before proceeding. No exceptions. |
-| HIGH | Fix, OR defer with explicit user approval + rationale |
-| MEDIUM | Documented disposition: fix / defer / accept-with-justification |
-| LOW | Batch into follow-up. Document the decision. |
+Read all `round-1-<reviewer>.json` files. Address each CRITICAL and HIGH
+finding by editing the plan / spec_audit. Write
+`agent_verification/round-1-fixes.md` describing what changed and why per
+finding (1-2 sentences each). This file is the carryover input for round 2.
 
-After all reports land, write `specs/<feature>/agent_verification/SUMMARY.md`:
+### Round 2 — verification (parallel)
+
+Launch the SAME reviewers with the verify-your-findings framing. They read
+their own round-1 findings file + the fixes doc + the updated plan. They do
+NOT re-derive findings from scratch.
+
+```
+Agent(subagent_type="tlmforge:architect-reviewer", model="sonnet", description="...", prompt=<round-2 launch prompt>)
+# (same for tester, threat-modeler, ux-reviewer)
+```
+
+### Round 2 launch prompt template
+
+```
+You are reviewing the <FEATURE> design at ROUND 2.
+
+You reviewed this plan once before. Your round-1 findings are at:
+  agent_verification/round-1-<your-role>.json
+
+Main Claude has now fixed the plan in response. The fixes summary is at:
+  agent_verification/round-1-fixes.md
+
+The updated plan is at:
+  specs/<feature>/README.md
+
+Iteration: 2
+
+Your job:
+1. For each of YOUR round-1 findings: verdict FIXED / PARTIALLY / NOT_FIXED
+   with file:line evidence in the updated plan.
+2. Add NEW findings only for issues you genuinely missed in round 1 — not
+   the same finding from a different angle. New signal, not re-derivation.
+
+Save BOTH:
+- agent_verification/round-2-<your-role>.md
+- agent_verification/round-2-<your-role>.json
+
+Top-level verdict: approve (all your prior findings fixed, no new criticals)
+or needs_revision (any not_fixed or new critical).
+```
+
+### After Round 2
+
+If **every reviewer's verdict is `approve` AND every round-2 JSON has zero
+CRITICAL findings**: proceed to Stage 4.
+
+If any reviewer is `needs_revision` OR any CRITICAL remains: main Claude
+fixes again, writes `round-2-fixes.md`, launches Round 3.
+
+### Round 3 — final verification
+
+Same framing as Round 2, against round-2 findings.
+
+If **every reviewer approves and zero CRITICALs**: proceed to Stage 4.
+
+If unresolved findings remain after Round 3: write
+`agent_verification/ESCALATION.md`:
 
 ```markdown
-# Agent Verification — Consolidated
+# ESCALATION — round 3 unresolved findings
 
-| Agent | Verdict | Report |
-|---|---|---|
-| architect-reviewer | NEEDS REVISION (4 critical, 4 high) | architect_review.md |
-| code-reviewer | APPROVE WITH WARNINGS | code_review.md |
-| tester | DO NOT SHIP | tester_review.md |
-| ux-reviewer | <verdict or N/A> | ux_review.md |
-| general-purpose | <verdict> | independent_review.md |
+## Outstanding by reviewer
 
-## What was actually broken (categories)
+### architect-reviewer
+- <finding-id> [severity]: <one-line summary> — current state: <NOT_FIXED|PARTIAL>
+- ...
 
-### Category 1: <name>
-<concise description; what was wrong; how to fix>
+### tester
+- ...
 
-### Category 2: ...
+## Why Claude couldn't resolve in 3 rounds
+<1-2 paragraphs — honest account, not excuses>
 
-## Cost / scope corrections
-<any plan numbers that turned out wrong>
+## User decision required
 
-## Deferred (with rationale)
-- ID: <description> — Reason: <why not now>
-
-## Re-run after fixes (mandatory)
-After commit <SHA>, re-run agents. Expected verdict change:
-- architect: NEEDS REVISION → APPROVE
-- tester: DO NOT SHIP → SHIP TO <stage>
+  (a) Accept the residual risk and ship the plan as-is
+  (b) Extend rounds (re-launch round 4 — costs more credits)
+  (c) Revise the spec / re-scope the feature
+  (d) Abandon — close this feature
 ```
 
-**Do not proceed to Stage 4** until the SUMMARY.md exists and all
-CRITICAL items have a fix path. (Fix can be deferred to a specific
-phase, but it must be tracked.)
+Surface the escalation to the user via a clear chat message. Do NOT proceed
+to Stage 4 without an explicit decision.
+
+### Carryover artifacts (Stage 3 → Stage 4)
+
+- `agent_verification/tester_edge_cases.json` — produced by tester at Round 1.
+  Main Claude reads this at Stage 4 as the scenario seed for TDD. Phase-end
+  tester reads it as the coverage-validation checklist. (Schema in `tester.md`.)
+- All `round-N-<reviewer>.json` files persist for audit trail.
+
+### Final summary (write after Round 2 or 3 approval)
+
+Write `specs/<feature>/agent_verification/SUMMARY.md`:
+
+```markdown
+# Agent Verification — Stage 3 Consolidated
+
+| Reviewer | R1 verdict | R2 verdict | R3 verdict | Final |
+|---|---|---|---|---|
+| architect-reviewer | needs_revision (4C/4H) | needs_revision (1H) | approve | APPROVE |
+| tester | do_not_ship (3C) | approve | n/a | APPROVE |
+| threat-modeler | needs_revision (2H) | approve | n/a | APPROVE |
+
+## What was actually broken (categories from round 1)
+### Category 1: <name>
+<concise description; what was wrong; how Claude fixed it>
+
+## Deferred (with rationale)
+- <ID>: <description> — deferred to Phase <N> per <reason>
+
+## Carryover artifact
+tester_edge_cases.json — <N> scenarios for main Claude to seed Stage 4 TDD.
+```
+
+**Do not proceed to Stage 4** until SUMMARY.md exists, every reviewer's final
+verdict is `approve`, AND zero CRITICAL findings remain in the final round JSONs.
 
 ---
 
@@ -444,39 +569,74 @@ Commit `phase-N-verify.md` BEFORE running tests. Commit
 
 ### 4.3 Execute
 
-The TDD discipline (`.claude/rules/tdd.md`):
+The TDD discipline (`~/.claude/rules/tdd.md`) — applied per test layer:
 
-1. Write tests first
-2. **Run them — verify RED.** A test that passed before implementation
-   is worthless.
-3. Implement the minimum code
-4. Run tests — verify GREEN, ALL of them, not just new ones
-5. Build / compile clean
-6. Capture evidence (next step)
+1. **Source scenarios.** Read `agent_verification/tester_edge_cases.json`
+   (produced by Stage 3 tester at Round 1) as the **scenario seed**. For each
+   edge case, assign a test layer (unit / integration / E2E). Add new
+   scenarios only if implementation surfaces something Stage 3 missed —
+   mark these with `source: "impl"` in the JSON so the phase-end tester
+   knows they were impl-time additions.
+2. **Identify applicable layers:**
+   - Unit: always required for new logic
+   - Integration: required when crossing module/service boundaries OR
+     touching I/O (DB, network, file, queue)
+   - E2E: required when affecting a user-facing flow OR public API contract
+3. **Write tests FIRST** for every applicable layer.
+4. **Run new tests — confirm RED.** A test that passes before impl is
+   worthless.
+5. **Implement** the minimum code.
+6. **Run new tests AND the FULL pre-existing test suite — confirm GREEN
+   across the board AND zero regressions on pre-existing tests.** The
+   "no-blast-radius" check is non-optional.
+7. **Build / compile clean.**
+8. **Capture test-run output into `phase-N-evidence.md`** (see 4.4) —
+   actual command output with counts per layer, total elapsed, coverage
+   numbers if available, and explicit confirmation that pre-existing tests
+   still pass.
 
 ### 4.4 `phase-N-evidence.md` — what was OBSERVED (after running)
 
 This is the receipt. A reviewer copies the commands and reproduces them.
+Phase-end tester re-runs the suite and cross-checks the numbers in this
+file against live output — discrepancies are CRITICAL findings.
 
 ```markdown
 # Phase N — Hard Evidence
 
-## Test runs
-```
-$ cd backend && ./venv/bin/python -m pytest tests/test_X.py tests/test_Y.py -v
-# (paste full output: counts, timing, version SHAs)
-```
+## Test runs (per layer)
+
+### Unit tests
+$ <runner command>
+# Full output, including pass/fail counts and elapsed time.
+
+### Integration tests (if applicable)
+$ <runner command>
+# ...
+
+### E2E tests (if applicable)
+$ <runner command>
+# ...
+
+## Full pre-existing test suite (regression check — REQUIRED)
+$ <full-suite command>
+# Full output. Must show zero new failures vs the pre-phase baseline.
+
+## Summary
+- Unit: <count> passed, <count> failed, <elapsed>
+- Integration: <count> passed, <count> failed, <elapsed>
+- E2E: <count> passed, <count> failed, <elapsed>
+- Full pre-existing suite: <count> passed, <count> failed (must be unchanged from pre-phase)
+- Coverage (if available): <percentage>; uncovered lines: <list>
 
 ## Build
-```
 $ <build command>
-# (paste relevant output)
-```
+# Relevant output.
 
-## Live samples
-- Firestore document at <path> after the change: <key shape>
-- API response: ```<json>```
-- Logs: ```<grep result>```
+## Live samples (when applicable)
+- DB document / table row after the change: <shape>
+- API response: <json>
+- Logs: <grep result>
 
 ## Before vs after
 - Before: <state>
@@ -524,6 +684,115 @@ A reviewer can reproduce all of the above by:
 - [ ] <any remaining gate>
 ```
 
+### 4.6 Phase-end verification (after each phase)
+
+After `phase-N-summary.md` is written and committed, run end-of-phase
+verification — 3 agents in parallel (+ 1 conditional). Same 3-round cap as
+Stage 3: if findings persist after round 3, escalate to user. This catches
+bugs at phase boundary before they compound into the next phase, AND
+verifies that promised tests are present and passing.
+
+**Diff baseline:** Use the `git_sha:` recorded in
+`specs/<feature>/phase-N-state.md` frontmatter (written at phase start, per
+§4 State handoff requirement). This anchors the diff to the actual phase
+boundary — phases produce multiple commits (spec, verify, impl, evidence,
+summary), so `HEAD~1..HEAD` would only see the last commit.
+
+```bash
+PHASE_START_SHA=$(grep '^git_sha:' specs/<feature>/phase-N-state.md | awk '{print $2}')
+git diff ${PHASE_START_SHA}..HEAD   # full phase diff
+```
+
+### Phase-end roster (3 agents, +1 conditional)
+
+Launch in parallel, single assistant message with multiple Agent tool calls:
+
+```
+Agent(subagent_type="tlmforge:code-reviewer", model="sonnet", ...)
+Agent(subagent_type="tlmforge:tester",        model="sonnet", ...)
+Agent(subagent_type="tlmforge:phase-auditor", model="sonnet", ...)
+# + Agent(subagent_type="tlmforge:ux-reviewer", model="sonnet", ...) only if UI files in phase diff
+```
+
+Detect UI condition with a generic file-extension/path heuristic (e.g.
+`.tsx`, `.vue`, `.dart` with material/cupertino imports, `.html/.css`,
+Android `res/layout/`). When uncertain, fall through to "no UX review" —
+no false-positive risk.
+
+### Round 1 launch prompt template (each reviewer)
+
+```
+You are reviewing the phase diff for <FEATURE> Phase <N>.
+This is ROUND 1 of phase-end verification.
+
+Feature dir:       specs/<feature>/
+Phase spec:        specs/<feature>/phase-N-<topic>.md   (the promise)
+Phase evidence:    specs/<feature>/phase-N-evidence.md  (the receipt)
+Phase start SHA:   <PHASE_START_SHA>
+Scope:             git diff ${PHASE_START_SHA}..HEAD only — cross-phase
+                   concerns are NOT in scope at phase end (Stage 5 covers those).
+Iteration: 1
+
+Your role-specific framing:
+- code-reviewer:  TDD compliance, pattern consistency, security on impl,
+                  no dead code, no surprises. Apply your full checklist
+                  to the phase diff only.
+- tester:         Read agent_verification/tester_edge_cases.json. For each
+                  edge case, confirm a test exists in the phase diff at the
+                  right layer (unit/integration/E2E). RUN THE SUITE
+                  YOURSELF and cross-check against phase-N-evidence.md
+                  claimed numbers — discrepancy is CRITICAL.
+- phase-auditor:  Promise-vs-delivered. Was every "in scope" item in
+                  phase-N-spec.md delivered? Were the promised tests
+                  delivered, at the right layer, and passing? Do not
+                  opine on architecture or edge cases.
+- ux-reviewer:    Accessibility + platform-convention check on the UI
+                  files in the phase diff. Scope to phase diff only,
+                  not whole-app UX.
+
+Output BOTH:
+- specs/<feature>/phase-N-verification/<your-role>.md   (prose)
+- specs/<feature>/phase-N-verification/<your-role>.json (per the JSON schema)
+```
+
+### Round 2 / Round 3 (if needed)
+
+If any reviewer returns `needs_revision` or any CRITICAL appears: main
+Claude fixes, writes `phase-N-verification/round-1-fixes.md`, re-launches
+the SAME reviewers with verify-your-findings framing (same protocol as
+Stage 3 Round 2). Cap at 3 rounds.
+
+If unresolved after Round 3: write
+`phase-N-verification/ESCALATION.md` and prompt the user — same format
+as Stage 3's escalation.
+
+### Phase-end verdict aggregation
+
+After every reviewer approves and zero CRITICALs remain in the round-N
+JSONs, write `phase-N-verification/SUMMARY.md`:
+
+```markdown
+# Phase N — Verification Summary
+
+| Reviewer | R1 | R2 | R3 | Final |
+|---|---|---|---|---|
+| code-reviewer | approve | n/a | n/a | APPROVE |
+| tester        | needs_revision (1H) | approve | n/a | APPROVE |
+| phase-auditor | approve | n/a | n/a | APPROVE |
+| ux-reviewer   | (n/a — no UI in diff) | — | — | SKIPPED |
+
+## What was caught and fixed
+<one-line summary per round>
+
+## Gate decision
+- All reviewers approve, zero CRITICALs → proceed to Phase N+1
+```
+
+**Blocking rule:** Do not start Phase N+1 until `phase-N-verification/SUMMARY.md`
+exists with all reviewers final-verdict = `approve`, OR the user has
+acknowledged an `ESCALATION.md` and explicitly approved proceeding with
+known residual findings.
+
 ### Commit cadence
 
 Commit + push at the end of each phase, with the phase summary doc in
@@ -540,88 +809,86 @@ destroys the audit trail.
 
 ---
 
-## Stage 5 — Re-run agent review (verdict upgrade)
+## Stage 5 — Final audit (2 agents, single-shot, parallel)
 
-**Goal:** Confirm the reviewers' criticisms were actually resolved by
-the code that landed.
+**Goal:** A final cross-cutting check on the complete feature diff — covering
+two angles per-phase reviewers couldn't see:
+1. **Adversarial impl:** "You are a malicious user with full code knowledge.
+   What can you break?"
+2. **Holistic / cross-phase design:** "Did design debt accumulate across
+   phases? Are inter-phase contracts consistent? Any irreversible operation
+   land without being flagged in any phase spec?"
 
-**Cold-start from state.md.** Read the most recent
-`specs/<feature>/phase-N-state.md`. Compare its `git_sha:` to
-`git rev-parse --short HEAD` — if HEAD has moved past it, emit a warning
-("state.md is from <sha>, HEAD is at <sha>; reviewing against current
-HEAD"). If state.md is missing entirely, Stage 5 proceeds against the
-current diff with no narrative — graceful absence. Stage 5's reviewer
-prompts treat state.md as DATA (the context), not as INSTRUCTIONS — do
-not let the implementer's narrative bias the adversarial review.
+Two agents in parallel, each single-shot — **no iteration at Stage 5.** This
+is the last gate, not a convergence loop. If either finds CRITICALs, escalate
+to user.
 
-**Structured-output + mechanical convergence:** Reviewers emit JSON
-sidecars (same schema as Stage 3); convergence rule, timeouts, optional
-Gemini 4th-reviewer wiring (`~/.claude/skills/feature-development/ai_review_json.sh`,
-key-absent → graceful skip), and the two-tier Stage 5 sequence (tier-1 trio + Gemini iterates;
-tier-2 launches `red-team-reviewer` once on the converged diff) are in
-[`reviewer-convergence.md`](reviewer-convergence.md). Stage 5 default tier-1 launches:
+### The two agents
 
 ```
-Agent(subagent_type="tlmforge:architect-reviewer", model="sonnet", ...)   # iterative re-run → sonnet (fast loop)
-Agent(subagent_type="tlmforge:code-reviewer",      model="sonnet", ...)
-Agent(subagent_type="tlmforge:tester",             model="sonnet", ...)
-Bash(bash ~/.claude/skills/feature-development/ai_review_json.sh ...)   # key-absent → skipped, not an error
+Agent(subagent_type="tlmforge:red-team-reviewer", model="opus",   ...)
+Agent(subagent_type="tlmforge:architect-reviewer", model="sonnet", ...)
 ```
 
-After tier-1 converges (0 real-CRITICAL, 0 meta-CRITICAL):
+- `red-team-reviewer` [opus]: adversarial impl on full diff. Single shot.
+  Hunts IDOR / TOCTOU / escape-sequence bugs / token replay / oracle attacks
+  / timing attacks. Opus depth justified — this is the one place opus is
+  used per feature, and it's where deep reasoning pays off.
+- `architect-reviewer` [sonnet]: holistic + cross-phase design check on
+  full diff. NOT a re-derivation of design from scratch — focuses
+  specifically on inter-phase consistency, accumulated debt, and any
+  irreversible operation that slipped through without explicit acknowledgment
+  in a phase spec.
+
+**Not at Stage 5:**
+- `code-reviewer`: every phase's code-reviewer at Stage 4 phase-end already
+  saw it. Cross-phase code quality concerns roll up via
+  `architect-reviewer`'s holistic pass.
+- `tester`: phase-end tester verified per-phase tests. Cross-phase
+  integration testing belongs at Stage 6 live verification.
+- `threat-modeler`: only at Stage 3 (design time). Adversarial impl-time
+  review is red-team-reviewer's lane.
+- `phase-auditor`: phase-bound; doesn't fire at Stage 5.
+
+### Stage 5 launch prompt template
 
 ```
-Agent(subagent_type="tlmforge:red-team-reviewer", model="opus", ...)   # final adversarial; single shot — opus for max depth
+You are running Stage 5 final audit on <FEATURE>.
+
+Feature dir:       specs/<feature>/
+Full diff scope:   git diff <feature-start-sha>..HEAD
+                   (the feature-start-sha is the SHA at the end of Stage 3
+                    Round-N — before Stage 4 Phase 1 started)
+Single shot:       NO iteration. One pass, one verdict.
+
+Role-specific framing:
+- red-team-reviewer:  "Malicious user with full code knowledge." Hunt
+                      IDOR / TOCTOU / escape bugs / token replay / oracle
+                      attacks / timing attacks. Adversarial impl-time
+                      review.
+- architect-reviewer: Holistic + cross-phase. Look for design debt
+                      accumulated across phases, inter-phase contract
+                      consistency, irreversible operations that should
+                      have been flagged but weren't.
+
+Output:
+- agent_verification/final_audit_<your-role>.md   (prose)
+- agent_verification/final_audit_<your-role>.json (per JSON schema)
+
+Verdict: approve | needs_revision | do_not_ship.
 ```
 
-If red-team-reviewer adds 0 CRITICAL → ship. If it adds 1+ CRITICAL → tier-1 restart with the
-new findings folded in. Single shared iteration counter; cap remains 3 tier-1 iterations.
+### Outcomes
 
-### Skip rule
+- **Both approve, zero CRITICALs:** write `agent_verification/SUMMARY.md`
+  marking Stage 5 complete, proceed to Stage 6.
+- **Either has CRITICALs:** write `agent_verification/FINAL_ESCALATION.md`
+  listing the findings. Surface to user. Options: fix and re-run Stage 5
+  (a fresh pair of single-shot calls, not iterative); accept residual risk
+  with documented justification; abandon.
 
-Re-run Stage 3 agents **if and only if** any original verdict was
-`NEEDS_REVISION` or `DO_NOT_SHIP`, OR any agent flagged CRITICAL findings
-(even if the overall verdict was approve-with-warnings).
-
-If all agents approved at first pass with no CRITICAL findings, skip
-Stage 5 and document in `agent_verification/SUMMARY.md`:
-> "No re-review required — all agents approved at first pass with no
-> CRITICAL findings. Stage 5 skipped."
-
-Re-running 3-4 subagents to confirm "yes still approve" is wasteful
-when the original review was already clean.
-
-### When re-review IS required
-
-After all CRITICAL/HIGH findings are addressed, **re-launch the same
-agents to confirm DONE status. Use `model="opus"` for the final confirmation
-pass** (this is the DONE stamp; Opus depth matters here). Use `model="sonnet"`
-for intermediate re-runs where you're checking specific fixes, not confirming
-overall readiness. Final confirmation prompt:
-
-```
-You previously reviewed <feature> at commit <OLD_SHA>. Verdict was
-<previous verdict> with N CRITICAL findings (see your prior report at
-specs/<feature>/agent_verification/<your_role>_review.md).
-
-Fixes have landed in commits <SHA1>..<SHA2>. Re-verify ONLY the items
-you originally flagged as CRITICAL or HIGH. For each, state:
-- [FIXED / NOT FIXED / FIXED INCORRECTLY] with file:line evidence
-
-Then update your verdict: NEEDS REVISION → ?
-
-Append your re-review to specs/<feature>/agent_verification/<your_role>_review.md
-under a "## Re-review (<date>, commits <range>)" heading. Do not
-overwrite the original review.
-
-Update specs/<feature>/agent_verification/SUMMARY.md to reflect verdict
-changes.
-```
-
-The SUMMARY.md ends with a verdict-upgrade table. The encryption work
-went `architect: NEEDS REVISION → APPROVE`, `tester: DO NOT SHIP →
-SHIP TO SHADOW`. That upgrade trail is what makes the work auditable
-end-to-end.
+**There is no automatic iteration at Stage 5.** The phase-end gates were
+the iterative loops. Stage 5 is the punctuation, not another loop.
 
 ---
 
