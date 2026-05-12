@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.5.3 (2026-05-12)
+
+### Stage 1 renamed: "Request audit" → "Feature request analysis"
+
+0.5.2's rename to "Request audit" was a step forward but still slightly
+clinical. "Feature request analysis" is more accessible — it's the
+industry-standard term for the activity (analyze the user's feature
+request, surface hidden assumptions, ask back where decisions are
+needed). Same behavior, clearer name.
+
+- SKILL.md Stage 1 section header + recipe-at-a-glance diagram updated
+- `docs/ARCHITECTURE.md` flow chart updated
+
+Artifact filename `spec_audit.md` is unchanged — it's the structured
+spec produced by the analysis, and renaming it would break references in
+every existing `specs/<feature>/` dir and every reviewer agent prompt.
+
+### Migration
+
+None — pure label change. No behavior change.
+
+---
+
 ## 0.5.2 (2026-05-12)
 
 ### Stage 1→2 gate: remove hardcoded keyword trigger

@@ -39,11 +39,12 @@
   ╚════════════════════╝                          │
             │                                     ▼
             │      ┌────────────────────────────────────────────────────┐
-            │      │ Stage 1: Request audit (main only)                  │
-            │      │   Audits the user's REQUEST (not a pre-existing     │
-            │      │   spec doc — none exists yet). Surfaces hidden      │
-            │      │   assumptions, threats, edge cases, costs,          │
-            │      │   rollback risks. Produces the structured spec.     │
+            │      │ Stage 1: Feature request analysis (main only)       │
+            │      │   Analyzes the user's FEATURE REQUEST (not a        │
+            │      │   pre-existing spec doc — none exists yet).         │
+            │      │   Surfaces hidden assumptions, threats, edge cases, │
+            │      │   costs, rollback risks. Produces the structured    │
+            │      │   spec.                                             │
             │      │   → specs/<f>/spec_audit.md                         │
             │      │                                                     │
             │      │ Open questions tagged [GATE-BLOCKING] or            │
