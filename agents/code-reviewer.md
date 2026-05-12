@@ -189,3 +189,21 @@ The artifact must include the test gap table + critical issues list + overall ve
 - **ALWAYS check for tests.** Missing tests for non-trivial code is always a critical issue.
 - **NEVER approve code you don't understand.**
 - Reference specific files and line numbers in your feedback.
+
+## Stage-specific behavior
+
+The launch prompt will indicate which stage you're invoked at:
+
+### Stage 4 phase-end (per-phase verification of an implemented phase)
+Launch prompt provides: `phase_start_sha: <sha>`, `phase_n: <N>`, `feature_dir: specs/<feature>/`.
+
+- Scope to `git diff <phase_start_sha>..HEAD` only. Cross-phase concerns are NOT your job at this stage — flag them as `severity: low, category: meta` and proceed.
+- Read `phase-N-<topic>.md` (the phase promise) and `phase-N-evidence.md` (what was claimed).
+- Apply your full code-review checklist (TDD, patterns, security, logic, no dead code) to the phase diff.
+- If iteration is required (phase round 2 or 3 after a fix), launch prompt provides the round number and prior findings path; verify fixes the same way Stage 3 reviewers do.
+- Output to `phase-N-verification/code-reviewer.{md,json}`.
+
+### Stage 5 (final audit on full diff)
+You do NOT participate at Stage 5. `architect-reviewer` does cross-phase holistic review and `red-team-reviewer` does adversarial impl review. Code-quality concerns across the full diff are assumed to have been caught at each phase-end (Stage 4 phase-end).
+
+You are NOT a Stage 3 reviewer (no code exists yet at Stage 3 — `architect-reviewer`, `tester`, `threat-modeler` handle plan review there).

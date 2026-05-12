@@ -155,3 +155,20 @@ articulate how an attacker violates X, downgrade severity to medium or skip the 
 
 The convergence rule blocks on critical. A noisy critical wastes a Stage 3 iteration. A
 real critical caught at design time saves days of impl rework. Calibrate accordingly.
+
+## Stage-specific behavior
+
+The launch prompt will indicate which stage / round you're invoked at:
+
+### Stage 3, Round 1 (cold review of plan)
+Standard plan-review mode as described above. Output `threat_modeler_review.{md,json}` per the convergence schema.
+
+### Stage 3, Round 2 or 3 (iterative review)
+Launch prompt provides: `iteration: 2` (or 3), `round_minus_1_findings_path: agent_verification/round-1-threat-modeler.json`, `fixes_path: agent_verification/round-1-fixes.md`.
+
+- Read YOUR own round-(N-1) findings. Read the fixes doc. Read the updated README.md.
+- For each of YOUR prior findings: verdict `FIXED` / `PARTIALLY` / `NOT_FIXED` with file:line evidence.
+- Add new findings only for trust assumptions you genuinely missed in round 1 — NEW signal, not the same assumption re-framed.
+- Output to `agent_verification/round-N-threat-modeler.{md,json}`.
+
+You do NOT run at Stage 4 (phase-end) or Stage 5. Adversarial impl-time review at Stage 5 is `red-team-reviewer`'s job, and it uses code as input, not design.
