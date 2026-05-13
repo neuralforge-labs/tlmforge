@@ -37,9 +37,11 @@ The two are complementary. Use superpowers for task dispatch and execution struc
 claude plugin add github:neuralforge-labs/tlmforge
 ```
 
-Then run setup:
+**Restart your Claude Code session after install or upgrade.** Claude Code caches plugin manifests per session — without a restart, newly added agents (like `phase-auditor`) won't appear in the agent registry, and updated `tools:` lists on existing agents won't take effect. Symptoms of a stale cache: `agent type not found` errors, or Stage 3 / Stage 5 convergence loops that never reach zero CRITICALs.
 
-```bash
+Once restarted, invoke the skill on any task:
+
+```
 /tlmforge:feature-development
 ```
 
@@ -59,4 +61,4 @@ export GEMINI_API_KEY=your-key-here
 
 ## License
 
-Private. Do not redistribute.
+MIT — see [LICENSE](LICENSE).
