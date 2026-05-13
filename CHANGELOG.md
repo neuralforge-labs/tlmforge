@@ -1,5 +1,34 @@
 # Changelog
 
+## 0.5.4 (2026-05-13)
+
+### License: UNLICENSED → MIT
+
+The plugin is now MIT-licensed. Previous releases shipped with
+`"license": "UNLICENSED"` in `plugin.json` and "Private. Do not
+redistribute." in README — incompatible with the open-source
+distribution the marketing copy described. Fixed.
+
+- New top-level `LICENSE` file (MIT, copyright 2026)
+- `plugin.json` license field: `UNLICENSED` → `MIT`
+- README license section updated to point at `LICENSE`
+
+### Install docs: explicit "restart your session" guidance
+
+Documented the cache-refresh requirement that the
+`check-convergence-round-aware` dogfood surfaced as DF1/DF3/DF5: Claude
+Code caches plugin manifests per session, so newly added agents and
+updated `tools:` lists don't take effect until the session restarts.
+The README install section now spells this out with the specific
+symptoms of a stale cache (`agent type not found`, never-converging
+loops) so an installer can self-diagnose.
+
+### Migration
+
+None — pure docs + license metadata. No behavior change.
+
+---
+
 ## 0.5.3 (2026-05-12)
 
 ### Stage 1 renamed: "Request audit" → "Feature request analysis"
