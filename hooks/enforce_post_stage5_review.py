@@ -13,10 +13,18 @@ from overrides import has_override
 from transcript import load_transcript_entries, find_last_user_index
 from safe import fail_open
 
+# Use search (not match) so compound commands like `cd . && git commit` are caught.
+# gh pr create is intentionally excluded per master-plan decision.
 GIT_MUTATION_RE = re.compile(
-    r'^\s*(git\s+commit|git\s+push|gh\s+pr\s+(merge|create))',
+    r'\b(git\s+commit|git\s+push|gh\s+pr\s+merge)\b',
     re.IGNORECASE,
 )
+
+# verdict_sha must be a hex SHA (4–40 chars). Rejects refs like "HEAD", "main".
+_SHA_RE = re.compile(r'^[0-9a-fA-F]{4,40}$')
+
+# active_feature must be a safe path component — no slashes, no wildcards.
+_FEATURE_NAME_RE = re.compile(r'^[a-zA-Z0-9_\-\.]+$')
 
 DENY_MSG = """\
 [tlmforge] Stage 5 re-review required.
@@ -68,7 +76,7 @@ def main():
         sys.exit(0)
 
     cmd = payload.get("tool_input", {}).get("command", "")
-    if not GIT_MUTATION_RE.match(cmd):
+    if not GIT_MUTATION_RE.search(cmd):
         sys.exit(0)
 
     # Find repo root from cwd
@@ -84,7 +92,8 @@ def main():
         sys.exit(0)
     with open(marker_path, encoding="utf-8", errors="replace") as f:
         active_feature = f.read().strip()
-    if not active_feature:
+    # C-3: reject path-traversal and glob-expansion in feature name
+    if not active_feature or not _FEATURE_NAME_RE.match(active_feature):
         sys.exit(0)
 
     # Glob final audit files
@@ -97,8 +106,13 @@ def main():
     if not audit_files:
         sys.exit(0)
 
-    # Extract verdict_sha values from audit files
+    # Extract verdict_sha values from audit files.
+    # Distinguish:
+    #   - field absent → Stage 3 file, no enforcement, skip
+    #   - field present but not hex → invalid (C-1: reject git refs like "HEAD")
+    #   - field present and hex → enforce
     verdict_shas = []
+    invalid_sha_found = False
     for fpath in audit_files:
         try:
             with open(fpath, encoding="utf-8", errors="replace") as f:
@@ -106,10 +120,18 @@ def main():
         except (OSError, json.JSONDecodeError):
             continue
         sha = data.get("verdict_sha")
-        if sha and isinstance(sha, str) and sha.strip():
+        if sha is None:
+            continue  # field absent → Stage 3 file, skip
+        if isinstance(sha, str) and _SHA_RE.match(sha.strip()):
             verdict_shas.append(sha.strip())
+        else:
+            # C-1: field present but not a valid hex SHA → block, don't ignore
+            invalid_sha_found = True
 
     if not verdict_shas:
+        if invalid_sha_found:
+            print(DENY_MSG, file=sys.stderr)
+            sys.exit(2)
         sys.exit(0)
 
     # Get HEAD
@@ -137,8 +159,10 @@ def main():
         if last_user_idx is not None:
             user_content = entries[last_user_idx].get("message", {}).get("content", "")
             if isinstance(user_content, list):
+                # Skip tool_result blocks — they carry tool output, not user intent
                 text = " ".join(
-                    b.get("text", "") if isinstance(b, dict) else str(b)
+                    b.get("text", "") if isinstance(b, dict) and b.get("type") == "text"
+                    else ""
                     for b in user_content
                 )
             else:
@@ -158,7 +182,11 @@ def main():
         psr_sha = psr_data.get("verdict_sha")
         if not psr_sha or not isinstance(psr_sha, str):
             continue
-        normalized_psr = _normalize_sha(psr_sha.strip(), repo_root)
+        psr_sha = psr_sha.strip()
+        # C-1: reject refs in PSR files too
+        if not _SHA_RE.match(psr_sha):
+            continue
+        normalized_psr = _normalize_sha(psr_sha, repo_root)
         if normalized_psr and normalized_psr == head_sha:
             sys.exit(0)
 
