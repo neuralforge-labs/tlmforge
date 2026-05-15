@@ -888,6 +888,11 @@ Output:
 - agent_verification/final_audit_<your-role>.md   (prose)
 - agent_verification/final_audit_<your-role>.json (per JSON schema)
 
+The JSON file MUST include a `verdict_sha` field set to the full 40-char
+output of `git rev-parse HEAD` at the time you write the file. This SHA
+anchors the audit to the exact commit reviewed; Hook 3 uses it to detect
+post-audit drift.
+
 Verdict: approve | needs_revision | do_not_ship.
 ```
 
@@ -902,6 +907,27 @@ Verdict: approve | needs_revision | do_not_ship.
 
 **There is no automatic iteration at Stage 5.** The phase-end gates were
 the iterative loops. Stage 5 is the punctuation, not another loop.
+
+### Post-Stage-5 re-review (PSR) — if commits land after the audit
+
+If additional commits are made after Stage 5 (e.g., a fix from FINAL_ESCALATION
+or a reviewer-requested tweak), Hook 3 will block all `git commit` / `git push`
+calls because HEAD has drifted past the audited SHA.
+
+To unblock, run a PSR: re-launch Stage 5 as a fresh single-shot pair (same
+prompt template above) and save the output as:
+
+```
+specs/<feature>/agent_verification/final_audit_<role>_psr_<HEAD-sha>.json
+```
+
+where `<HEAD-sha>` is the **full 40-char SHA** of HEAD at the time the PSR
+audit was written. The `verdict_sha` field inside must also equal that SHA.
+Hook 3 validates both the filename and the internal field.
+
+Do not call these files "Stage 5b" — that name is reserved for spec-drift
+review (see LL-2 section below). The correct term is "PSR" (post-Stage-5
+re-review).
 
 ---
 
