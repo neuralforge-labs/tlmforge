@@ -61,9 +61,10 @@ def main():
     last_user = entries[last_user_idx]
     user_content = last_user.get("message", {}).get("content", "")
     if isinstance(user_content, list):
-        # content may be a list of blocks; join text parts
+        # Only join text-type blocks — skip tool_result blocks (carry tool output, not user intent)
         text = " ".join(
-            b.get("text", "") if isinstance(b, dict) else str(b)
+            b.get("text", "") if isinstance(b, dict) and b.get("type") == "text"
+            else ""
             for b in user_content
         )
     else:

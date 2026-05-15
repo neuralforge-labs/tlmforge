@@ -1,0 +1,57 @@
+{
+  "reviewer": "architect-reviewer",
+  "schema_version": "1.0",
+  "iteration": 1,
+  "verdict": "needs_revision",
+  "verdict_sha": "4620576376dc3ff5c7a32160519acff2e3f8f39f",
+  "findings": [
+    {
+      "severity": "high",
+      "category": "architecture",
+      "file": "hooks/enforce_post_stage5_review.py",
+      "line": 16,
+      "finding": "Hook 3 intercepts `gh pr create` but the master plan explicitly decided against this (README.md Decisions Made section, informational item #4). The regex includes `|create` alongside `merge`, contradicting the documented decision. The deviation is untested (no test exercises gh pr create against Hook 3) and undocumented in the README hook table.",
+      "suggested_fix": "Either remove `|create` from GIT_MUTATION_RE and document the alignment with the plan decision, OR update README.md Decisions Made + hook table to document that gh pr create was added to scope and add a test for it."
+    },
+    {
+      "severity": "high",
+      "category": "architecture",
+      "file": "hooks/enforce_skill_invoked.py",
+      "line": 39,
+      "finding": "The marker-file fallback for Hook 2 was planned in Phase 0 (README.md lines 136, 230, 310) but not implemented. When transcript_path is absent, Hook 2 warns and fails open silently. The empirical Phase 0 validation confirmed transcript_path is present in current Claude Code versions, but this assumption is undocumented. Any future Claude Code version change that removes transcript_path from PreToolUse payloads silently disables Hook 2 enforcement with no user-visible indication beyond a stderr warning.",
+      "suggested_fix": "Either implement the marker-file fallback as planned (Hook 1 writes ~/.claude/tlmforge_skill_invoked_<session_id>, Hook 2 reads it), or explicitly document in README that the fallback was dropped and transcript_path is a required dependency, with a note on what Claude Code version it was verified against."
+    },
+    {
+      "severity": "medium",
+      "category": "test_coverage",
+      "file": "hooks/tests/test_integration.py",
+      "line": null,
+      "finding": "If gh pr create stays in Hook 3 scope (see H-1), there is no test asserting it is intercepted and blocked after HEAD drift. The integration test only exercises git push. This means the gh pr create interception path is untested end-to-end.",
+      "suggested_fix": "Add a test_hook3_gh_pr_create_blocked_after_drift test in test_hook3.py (or remove gh pr create from scope and document the decision)."
+    },
+    {
+      "severity": "medium",
+      "category": "documentation",
+      "file": "skills/feature-development/SKILL.md",
+      "line": 199,
+      "finding": "SKILL.md says the active-feature marker 'is harmless and idempotent to re-write' if Stage 1 is interrupted. This is true only as long as the abandoned feature has no partial final_audit_*.json files. If a feature generates audit files before being abandoned and Stage 7 is never reached, the stale marker will scope Hook 3 to those old audit files for all subsequent features. No runbook entry or documentation instructs operators to clean up stale markers.",
+      "suggested_fix": "Add a one-line operator note to SKILL.md Stage 7 or README: 'To clean up a stale marker from an abandoned feature, delete specs/.tlmforge_active_feature'."
+    },
+    {
+      "severity": "low",
+      "category": "documentation",
+      "file": "specs/enforcement-hooks/phase-3-evidence.md",
+      "line": null,
+      "finding": "Phase 3 evidence shows only the GREEN test run. No RED run (tests failing before implementation) is captured. TDD discipline requires RED evidence. This gap persists into the final shipped state.",
+      "suggested_fix": "Document RED run output in phase-N-evidence.md before the GREEN run. For this feature the evidence is post-hoc; acceptable as a process note for future features."
+    },
+    {
+      "severity": "low",
+      "category": "documentation",
+      "file": "hooks/enforce_post_stage5_review.py",
+      "line": 21,
+      "finding": "The block message does not include commit count ahead (e.g., 'N commits ahead') as specified in the original spec ('Stage 5 verdict at SHA X. HEAD is Y (N commits).'). The implementation omits this detail. Minor UX gap; not a correctness defect.",
+      "suggested_fix": "Add git rev-list --count <verdict_sha>..HEAD to compute drift count and include in block message, or document the omission as an accepted simplification."
+    }
+  ]
+}

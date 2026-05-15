@@ -1,0 +1,66 @@
+{
+  "reviewer": "red-team-reviewer",
+  "schema_version": "1.0",
+  "iteration": 1,
+  "status": "ok",
+  "verdict": "do_not_ship",
+  "verdict_sha": "4620576376dc3ff5c7a32160519acff2e3f8f39f",
+  "findings": [
+    {
+      "severity": "critical",
+      "category": "security",
+      "file": "hooks/enforce_post_stage5_review.py",
+      "line": 48,
+      "finding": "_normalize_sha() feeds verdict_sha verbatim to `git rev-parse`, which resolves any git ref (HEAD, branch names, tags) — not just SHAs. Setting `verdict_sha: \"HEAD\"` in the audit JSON makes Hook 3 unblock forever after arbitrary HEAD drift, because `git rev-parse HEAD` always equals the current HEAD. Reproduced live: a one-character edit to the audit file (`\"HEAD\"`) lets an attacker push without any PSR. `\"main\"` / `\"master\"` / any branch name behaves identically. This trivially defeats the entire purpose of Hook 3.",
+      "suggested_fix": "Validate verdict_sha matches `re.fullmatch(r\"[0-9a-f]{40}\", vsha)` before passing to `_normalize_sha`. Apply the same validation to PSR `verdict_sha` at line 161. Reject any non-hex value. Optionally drop `_normalize_sha` entirely and require full 40-char SHAs in audit files."
+    },
+    {
+      "severity": "critical",
+      "category": "security",
+      "file": "hooks/enforce_post_stage5_review.py",
+      "line": 16,
+      "finding": "GIT_MUTATION_RE only anchors at start-of-string and matches a bare `git` token. Trivially bypassed by `cd . && git commit -m foo`, `true; git commit`, `eval \"git commit ...\"`, `/usr/bin/git commit`, `env X=1 git commit`, or `sh -c \"git commit ...\"`. Reproduced live: `cd . && git commit` exits 0 from Hook 3 even with HEAD drifted past every recorded audit. The hook never even examines the audit state because the command shape isn't recognized. This is the gate's primary purpose, defeated by basic shell syntax.",
+      "suggested_fix": "Replace the regex with a parser: shlex.split() the command, walk across `&&`, `;`, `|`, `eval`, `sh -c` boundaries to extract candidate argvs, then check `os.path.basename(argv[0]) == \"git\"` and `argv[1] in {\"commit\", \"push\"}` (handle `git -c k=v commit` by skipping `-c` flag pairs). Defense-in-depth: also do a substring sweep on the full command for ` git commit` / ` git push` / ` gh pr (merge|create)` after stripping path prefixes."
+    },
+    {
+      "severity": "critical",
+      "category": "security",
+      "file": "hooks/enforce_post_stage5_review.py",
+      "line": 91,
+      "finding": "active_feature is read from specs/.tlmforge_active_feature and concatenated unsanitized into `os.path.join(repo_root, \"specs\", active_feature, \"agent_verification\")`. No path-traversal check, no glob-character check. (a) `active_feature = \"../evil\"` resolves to `<repo>/evil/agent_verification`, allowing the audit JSON to live anywhere on disk — outside the tracked specs/ tree — making forgery invisible to git review. (b) `active_feature = \"*\"` makes glob.glob expand the middle wildcard, letting any audit file from any feature satisfy the check. Reproduced live with C-1 to confirm a forged audit at `/repo/evil/agent_verification/...` with `verdict_sha: \"<HEAD>\"` exits 0.",
+      "suggested_fix": "After reading the marker, validate `re.fullmatch(r\"[A-Za-z0-9_\\-]+\", active_feature)` (no slashes, no dots, no glob metacharacters). On mismatch, log and exit 0 (fail-open) but emit a loud stderr warning. Optionally also assert `os.path.commonpath([os.path.realpath(av_dir), os.path.realpath(repo_root + \"/specs\")]) == os.path.realpath(repo_root + \"/specs\")` after path resolution."
+    },
+    {
+      "severity": "high",
+      "category": "security",
+      "file": "hooks/enforce_skill_invoked.py",
+      "line": 54,
+      "finding": "find_last_user_index returns the index of the last `type==\"user\"` JSONL entry without distinguishing human turns from tool_result wrappers. In Claude Code transcripts, tool results appear as user-typed entries containing `tool_result` blocks. If any tool's output text contains an override phrase (`be quick` / `just do it` / `trivial fix`), Hook 2 unblocks the next mutation. Reproduced live: a transcript whose last user entry has content `\"be quick\"` (a tool-result wrapper) bypasses Hook 2 even though the human never typed the phrase. A Bash command like `cat notes.txt` where notes.txt contains `be quick`, or `git log --grep=quick`, can trigger this.",
+      "suggested_fix": "In find_last_user_index, walk content blocks and skip user entries whose content (after normalization) contains only `tool_result`-typed blocks. A 'human turn' is a user entry whose content is a plain string that did NOT originate from a tool_result wrapper, OR a list with at least one `text`-typed block. Fall back to the prior human turn if the most-recent user entry is a tool result. Practical heuristic: if `last_user.get(\"message\", {}).get(\"content\")` is a list and every block has `block.get(\"type\") == \"tool_result\"`, recurse to the next-older user entry."
+    },
+    {
+      "severity": "high",
+      "category": "security",
+      "file": "hooks/enforce_skill_invoked.py",
+      "line": 52,
+      "finding": "The transcript file is local-only and fully under the developer's control. A malicious developer can append a forged `{\"type\":\"assistant\",\"message\":{\"content\":[{\"type\":\"tool_use\",\"name\":\"Skill\",\"input\":{\"skill\":\"tlmforge:feature-development\"}}]}}` line to the transcript JSONL between hook calls and Hook 2 will pass. The audit trail (transcript) is fully malleable and not committed to git — a later forensic review cannot establish that the skill was genuinely invoked vs. forged after the fact. Same threat surface as TLMFORGE_HOOKS=0 in terms of effort, but invisible whereas the env var is auditable.",
+      "suggested_fix": "Either (a) accept the threat and document in SKILL.md that 'Hook 2 enforces the discipline of running the skill, not its actual invocation; the transcript is local-only and not authoritative,' OR (b) add a side-channel: have the skill's first action write a marker file `specs/<feature>/.skill_invoked_<session_id>` (committed to git via the spec_audit.md commit), and have Hook 2 check for the marker instead of parsing the transcript. The marker route makes forgery visible in git diff."
+    },
+    {
+      "severity": "medium",
+      "category": "security",
+      "file": "hooks/_lib/env.py",
+      "line": 3,
+      "finding": "_DISABLED_VALUES includes empty string, so TLMFORGE_HOOKS=\"\" (set but empty) silently disables all hooks. SKILL.md documents `TLMFORGE_HOOKS=0` as the bypass but does not mention that empty-string also bypasses. A user setting `TLMFORGE_HOOKS=1` thinking they're enabling the hooks may not realize that an upstream `unset && export` or shell quirk left the var as empty.",
+      "suggested_fix": "Either remove \"\" from _DISABLED_VALUES (strict 'unset means enabled' semantics) OR explicitly document in SKILL.md that an empty-string value disables the hooks. The strict route is more predictable and matches user expectations."
+    },
+    {
+      "severity": "medium",
+      "category": "missing_error_handling",
+      "file": "hooks/enforce_post_stage5_review.py",
+      "line": 75,
+      "finding": "If the user invokes Claude Code from outside any git repo (e.g. `cd /tmp && claude`), `git rev-parse --show-toplevel` fails and Hook 3 exits 0 — even if the actual `git commit` they're about to run targets a different repo via `git -C <path> commit` or `GIT_DIR` env. The hook fails open without checking whether the candidate command itself names a different working tree.",
+      "suggested_fix": "If `git rev-parse --show-toplevel` fails on run_cwd, parse the candidate command for `-C <path>` or `--git-dir=<path>` and re-try with that. If still no repo can be located, fail open as today but emit a loud stderr warning so the user can audit the bypass."
+    }
+  ]
+}

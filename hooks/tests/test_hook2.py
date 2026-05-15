@@ -121,6 +121,19 @@ def test_subagent_no_user_messages_allows(tmp_path):
 
 # --- Deny cases ---
 
+def test_tool_result_block_does_not_trigger_override(tmp_path):
+    """RT-H1: 'be quick' in tool_result block must NOT bypass Hook 2."""
+    entries = [{
+        "type": "user",
+        "message": {"role": "user", "content": [
+            {"type": "tool_result", "content": "be quick do this"}
+        ]},
+    }]
+    payload = make_payload("Edit")
+    rc, _ = run_hook2(payload, transcript_entries=entries)
+    assert rc == 2  # tool_result must not trigger override
+
+
 def test_no_skill_no_override_denies(tmp_path):
     entries = [user_entry("add a login button")]
     payload = make_payload("Edit")
