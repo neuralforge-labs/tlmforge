@@ -94,6 +94,23 @@ phase-end, Stage 5 final).
 
 ---
 
+## Stage 0 — Non-work-request early exit
+
+The Hook 1 reminder fires on **every** user prompt. The skill's job at Stage 0
+is to exit cleanly when there's no feature to develop — so the reminder doesn't
+turn every "explain X" into a spec audit.
+
+**Rule:** If the user's prompt is conversational, exploratory, or read-only —
+examples: "what does this file do?", "explain X", "summarize Y", "how does Z
+work?", "is my plan right?" — exit immediately with a one-line acknowledgement
+and handle the request inline. Do **not** produce a `spec_audit.md`, do not
+invoke the classification gate, do not create any `specs/` artifacts.
+
+This is the only stage that can exit the skill without producing an artifact.
+All other stages produce something before advancing.
+
+---
+
 ## Stage 1 — Feature request analysis (produces `spec_audit.md`)
 
 **Goal:** Analyze the user's **feature request** — vague or precise,
@@ -168,6 +185,19 @@ why it's a non-issue for this feature:
 - (e) Rollback safety / blast radius
 
 Padding with manufactured LOW findings is worse than fewer real ones.
+
+**After writing `spec_audit.md`, write the active-feature marker:**
+
+```python
+# Write specs/.tlmforge_active_feature = <feature-directory-name>
+# e.g., for specs/enforcement-hooks/ → write "enforcement-hooks"
+import pathlib
+pathlib.Path("specs/.tlmforge_active_feature").write_text("<feature-name>\n")
+```
+
+This marker lets Hook 3 scope its audit-file glob to the current feature.
+Delete it at Stage 7. If Stage 1 is interrupted (gate fires, user abandons),
+the marker stays — it is harmless and idempotent to re-write.
 
 ### Stage 1 → Stage 2 gate (conditional — only when human input is needed)
 
@@ -1106,6 +1136,17 @@ This is the document linked from PR descriptions, status updates, and
 handoff notes. Keep it current — when STATUS.md goes stale, the audit
 trail breaks.
 
+**After writing STATUS.md, delete the active-feature marker:**
+
+```python
+import pathlib
+pathlib.Path("specs/.tlmforge_active_feature").unlink(missing_ok=True)
+```
+
+This unblocks Hook 3 for subsequent work (Hook 3 passes through when no marker
+exists). If the feature is ever resumed (e.g., a hotfix phase is added), Stage 1
+of the resumed work re-writes the marker.
+
 ---
 
 ## Required artifact structure
@@ -1415,6 +1456,14 @@ Either:
   bootstrap without doing real work
 
 Helper-only test coverage is necessary but not sufficient.
+
+**Wire-test extension (LL-6b):** For any UI-rendering change (page
+composition, component prop threading, button text, conditional rendering),
+the LL-6 rule extends to require an integration test that exercises the
+**complete wire path** end-to-end — e.g., `pricing/page.tsx → TierCards →
+rendered button text`. A component-only test that mounts `<TierCards />`
+in isolation does not satisfy this rule if the bug class is "page.tsx passes
+the wrong prop." The test must start from the page-level entry point.
 
 ### LL-7. Operator commands MUST run in background with redirected output
 

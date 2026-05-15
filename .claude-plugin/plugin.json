@@ -1,7 +1,7 @@
 {
   "name": "tlmforge",
   "description": "Production-grade feature development: adversarial multi-agent review, mechanical convergence enforcement, structured JSON severity schema, and a self-improving learnings loop. Ships threat-modeler + red-team-reviewer agents and five companion skills.",
-  "version": "0.5.4",
+  "version": "0.5.5",
   "author": {
     "name": "neuralforge-labs",
     "url": "https://github.com/neuralforge-labs"

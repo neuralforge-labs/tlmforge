@@ -8,6 +8,18 @@ A Claude Code plugin that enforces production-grade feature development discipli
 
 ## What's inside
 
+**Hooks (3 — auto-active after install)**
+| Hook | When | What it does |
+|---|---|---|
+| Hook 1 — skill reminder | Every user prompt | Injects a `systemMessage` reminding Claude to invoke `tlmforge:feature-development` before doing work |
+| Hook 2 — mutation gate | Before Edit / Write / Bash / MultiEdit | Blocks if the skill was not invoked in the current task window. Override: include `be quick`, `just do it`, or `trivial fix` in your prompt |
+| Hook 3 — post-Stage-5 gate | Before `git commit` / `git push` / `gh pr merge` | Blocks if HEAD has drifted past the SHA recorded in the Stage 5 final audit. Unblock by running a PSR (post-Stage-5 re-review) or setting `TLMFORGE_HOOKS=0` |
+
+**Bypass / escape hatches**
+- `TLMFORGE_HOOKS=0` (also `false` / `no` / `off`) — disables all three hooks for the session. Set in your shell before starting Claude Code, or export mid-session.
+- Override phrases in your prompt — `be quick` / `just do it` / `trivial fix` — bypass Hook 2 for that single task. Bare "minimal" or "trivial" are NOT accepted (too common in technical prose).
+- `tlmforge plugin remove` — nuclear option; removes all hooks permanently.
+
 **Skills (5)**
 | Skill | What it does |
 |---|---|
