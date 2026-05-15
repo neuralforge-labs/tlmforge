@@ -11,6 +11,7 @@ from transcript import load_transcript_entries, find_last_user_index, skill_invo
 from safe import fail_open
 
 MUTATION_TOOLS = {"Edit", "Write", "Bash", "MultiEdit"}
+MARKER_DIR = os.environ.get("TLMFORGE_MARKER_DIR") or os.path.expanduser("~/.cache/tlmforge")
 
 DENY_MSG = (
     "tlmforge: feature-development skill not invoked for this task.\n"
@@ -35,6 +36,15 @@ def main():
     tool_name = payload.get("tool_name", "")
     if tool_name not in MUTATION_TOOLS:
         sys.exit(0)
+
+    # Check marker file first — PostToolUse writes this synchronously when Skill fires,
+    # so it's present even when Skill and a mutation tool are called in the same turn
+    # (transcript isn't updated until the full turn completes).
+    session_id = payload.get("session_id", "")
+    if session_id:
+        marker = os.path.join(MARKER_DIR, f"skill_invoked_{session_id}")
+        if os.path.isfile(marker):
+            sys.exit(0)
 
     transcript_path = payload.get("transcript_path")
     if not transcript_path:

@@ -225,6 +225,39 @@ def test_hook3_bypassed_by_env(tmp_path):
     assert rc == 0
 
 
+def test_hook2_same_turn_end_to_end(tmp_path):
+    """
+    End-to-end loop scenario:
+    1. Hook 1 fires (new prompt) → must clear any prior marker
+    2. Claude calls Skill → PostToolUse writes marker (simulated here)
+    3. Claude calls Bash in SAME turn → transcript still only shows user msg
+    4. Hook 2 must check marker → allow (no loop)
+    """
+    marker_dir = tmp_path / "markers"
+    marker_dir.mkdir()
+    session_id = "e2e-loop-test"
+    env = {"TLMFORGE_MARKER_DIR": str(marker_dir)}
+
+    # Step 1: Hook 1 fires — clears any stale marker
+    marker_file = marker_dir / f"skill_invoked_{session_id}"
+    marker_file.write_text("")  # plant a stale marker from prior task
+    _run_hook(HOOK1, {"session_id": session_id, "prompt": "add feature"}, env_extra=env)
+    assert not marker_file.exists(), "Hook 1 must delete stale marker"
+
+    # Step 2: Skill fires — PostToolUse writes marker synchronously
+    marker_file.write_text("")
+
+    # Step 3: Bash fires in SAME turn — transcript only has user msg (not yet updated)
+    entries = [{"type": "user", "message": {"role": "user", "content": "add feature"}}]
+    transcript = _write_transcript(entries, str(tmp_path))
+    payload = {"session_id": session_id, "tool_name": "Bash",
+               "tool_input": {"command": "echo hello"},
+               "transcript_path": transcript}
+
+    rc, _, stderr = _run_hook(HOOK2, payload, env_extra=env)
+    assert rc == 0, f"Loop bug: Hook 2 blocked Bash despite marker present. stderr={stderr}"
+
+
 def test_hook3_override_phrase_bypasses_after_drift(tmp_path):
     repo, git_env = _git_setup(tmp_path)
     sha_a = _head(repo)
