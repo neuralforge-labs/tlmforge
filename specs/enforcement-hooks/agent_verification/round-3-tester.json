@@ -1,0 +1,35 @@
+{
+  "reviewer": "tester",
+  "schema_version": "1.0",
+  "iteration": 3,
+  "status": "ok",
+  "verdict": "approve",
+  "prior_findings": [
+    {
+      "id": "NEW-1",
+      "title": "Reminder text contradiction — minimal/trivial listed as bypass phrases",
+      "prior_severity": "medium",
+      "resolution": "FIXED",
+      "evidence": "README.md Phase 1 reminder text (lines 278-283) now lists only ['be quick', 'just do it', 'trivial fix'] and includes explicit parenthetical: 'Bare \"minimal\" / \"trivial\" are NOT accepted — they appear too often in technical prose.' The test_hook1_normal.py shape assertion will catch any regression against the old text."
+    },
+    {
+      "id": "NEW-2",
+      "title": "Marker file path not anchored to repo root",
+      "prior_severity": "low",
+      "resolution": "FIXED",
+      "evidence": "README.md Phase 3 Steps (lines 376-384) now calls git rev-parse --show-toplevel FIRST (single call), then uses <repo_root>/specs/.tlmforge_active_feature for the marker read and <repo_root>/specs/<feature>/agent_verification/ for the glob. test_hook3_cwd_subdirectory.py description (lines 427-428) explicitly states 'BOTH marker file AND glob' resolve correctly."
+    }
+  ],
+  "new_findings": [
+    {
+      "id": "LOW-1",
+      "severity": "low",
+      "category": "plan-ambiguity",
+      "file": "hooks/enforce_post_stage5_review.py",
+      "line": null,
+      "finding": "Phase 3 specifies that corrupt final_audit JSON files are skipped (JSONDecodeError -> continue), but does not specify the behavior when a PSR marker file EXISTS with a missing verdict_sha field (not wrong, not corrupt, just absent). If the implementation treats absent-field as a match, a manually written PSR marker without verdict_sha silently bypasses the gate. Correct intent is: absent verdict_sha in PSR marker -> treat as no valid PSR -> block.",
+      "suggested_fix": "During Phase 3 TDD, add test_hook3_psr_marker_missing_verdict_sha.py: PSR marker file exists, verdict_sha field absent -> hook returns exit(2). Clarify in implementation comments that absent field is treated as mismatch, not match.",
+      "blocks_approval": false
+    }
+  ]
+}

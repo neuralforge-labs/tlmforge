@@ -1,0 +1,73 @@
+{
+  "reviewer": "threat-modeler",
+  "schema_version": "1.0",
+  "iteration": 1,
+  "status": "ok",
+  "verdict": "needs_revision",
+  "findings": [
+    {
+      "severity": "high",
+      "category": "architecture",
+      "file": "architecture",
+      "line": null,
+      "finding": "The spec_audit (F3) explicitly rejects CI=true auto-bypass ('too magical'), but the master plan README architecture diagram and the review launch prompt both state 'Honor CI=true and GITHUB_ACTIONS.' This contradiction means different implementers will implement different bypass semantics. If CI=true is honored, any developer with CI=true in their shell profile silently bypasses all three hooks on every session, with no warning.",
+      "suggested_fix": "Resolve the contradiction in the master plan before Phase 0 begins. The authoritative bypass is TLMFORGE_HOOKS=0 only. Add an explicit sentence to README.md Phase 0 steps and to env.py's docstring: 'CI=true and GITHUB_ACTIONS are not honored as bypass signals. Use TLMFORGE_HOOKS=0.' Remove any reference to CI=true from the hook architecture."
+    },
+    {
+      "severity": "high",
+      "category": "architecture",
+      "file": "architecture",
+      "line": null,
+      "finding": "Hook 2's skill-invocation detection assumes a specific JSONL transcript shape for a Skill tool call (tool_name: 'Skill' + tool_input.skill: 'tlmforge:feature-development'), but the actual Claude Code transcript format for Skill calls is not verified or documented. If the real format uses a different field path (e.g., mcp__ prefixed tool name, or a nested 'name' field), Hook 2 will never detect the skill as invoked, permanently blocking all mutations even after the skill runs correctly.",
+      "suggested_fix": "Before Phase 2 implementation, capture one real Skill tool-call transcript entry from Claude Code and commit it as hooks/tests/fixtures/skill_invocation_sample.jsonl. Build the transcript.py detection logic against that verified shape. Add test_hook2_real_transcript_shape.py as a fixture-based test in Phase 0."
+    },
+    {
+      "severity": "high",
+      "category": "architecture",
+      "file": "architecture",
+      "line": null,
+      "finding": "Hook 3 checks for Stage 5b re-review by testing whether a file named final_audit_*_5b_<HEAD-sha>.json exists. It does not verify that the verdict_sha field inside the file equals the HEAD SHA. An accidental file copy, rename, or stub file with the correct filename but wrong or missing internal SHA would cause Hook 3 to pass through without a real re-review having occurred.",
+      "suggested_fix": "In Hook 3's Phase 3 implementation, after finding a candidate Stage 5b marker file by glob, parse the JSON and assert that verdict_sha == current HEAD SHA. If the field is absent or mismatched, treat the file as absent. Add test_hook3_5b_marker_sha_mismatch.py to Phase 3 test suite."
+    },
+    {
+      "severity": "medium",
+      "category": "missing_error_handling",
+      "file": "architecture",
+      "line": null,
+      "finding": "Hook 3 runs git rev-parse HEAD via subprocess. When this fails (git not on PATH, cwd not a git repo), the fail-open wrapper catches the exception and exits 0. This is indistinguishable from a hook logic crash. The user gets no signal that the Stage 5 SHA check was skipped due to a missing git environment.",
+      "suggested_fix": "In Hook 3, distinguish git subprocess failure from hook logic crash: catch subprocess.CalledProcessError and FileNotFoundError separately, write a human-readable WARNING to stderr ('tlmforge Hook 3: git rev-parse failed — Stage 5 SHA check skipped'), then exit 0. Reserve the silent fail-open for unexpected Python exceptions only."
+    },
+    {
+      "severity": "medium",
+      "category": "architecture",
+      "file": "architecture",
+      "line": null,
+      "finding": "The override phrase 'minimal' is detected as a bare case-insensitive substring. This matches natural technical prose: 'make minimal changes', 'minimal dependency footprint', 'minimal viable version'. A user writing any of these is describing scope, not intentionally bypassing the discipline gate. Hook 2 would silently allow mutations without skill invocation for these prompts.",
+      "suggested_fix": "Remove 'minimal' from the override phrase list, or replace it with a compound phrase that signals clear intent: 'minimal path' or 'minimal override'. The CLAUDE.md global rules list ('be quick', 'minimal', 'trivial', 'just do it') should be reviewed; if 'minimal' must stay, require it as a standalone word bounded by whitespace/punctuation, not a substring of a longer word like 'minimalistic'."
+    },
+    {
+      "severity": "medium",
+      "category": "architecture",
+      "file": "architecture",
+      "line": null,
+      "finding": "Hook 3 selects the authoritative Stage 5 verdict by file mtime when multiple final_audit JSON files exist. File mtime is reset by git checkout, cp, rsync, and backup restore. After a git checkout that touches specs/ files, mtime no longer reflects chronological review order; Hook 3 may select an older verdict as 'most recent', causing it to block commits that already have a valid Stage 5b marker, or pass commits that should be blocked.",
+      "suggested_fix": "Replace mtime-based selection with git-ancestry-based selection: for each final_audit*.json, extract verdict_sha; use 'git merge-base --is-ancestor <verdict_sha> HEAD' to find which anchors are ancestors of current HEAD; the anchor with the most recent position in git log order (not file mtime) is authoritative."
+    },
+    {
+      "severity": "medium",
+      "category": "architecture",
+      "file": "architecture",
+      "line": null,
+      "finding": "Hook 2's task window is defined as 'since last user message.' The design does not specify behavior when the transcript has zero prior user messages (first message in a new session, or headless one-shot invocation). If the window boundary logic returns None or errors on a missing prior message, the transcript.py interface has undefined behavior for Phase 0's most common first-message scenario.",
+      "suggested_fix": "Specify in transcript.py's interface contract: if fewer than one prior user message exists, the task window is the entire transcript from session start (i.e., window_start = 0). Add an explicit Phase 0 unit test: test_hook2_first_message_in_session — empty transcript with a Skill call as the only event should return skill_found=True."
+    },
+    {
+      "severity": "low",
+      "category": "observability",
+      "file": "architecture",
+      "line": null,
+      "finding": "The fail-open wrapper for Hook 2 exits 0 silently on any Python exception, with a warning only to stderr. Claude Code may not surface stderr prominently in the conversation. If Hook 2 crashes on every invocation (Python import error, version mismatch), enforcement is silently disabled for the entire session with no in-band signal. The planned mitigation (tlmforge:doctor) is deferred to an optional Phase 6 that may not ship.",
+      "suggested_fix": "When the fail-open wrapper catches an exception, emit a one-line JSON message to stdout as well as stderr: {\"type\": \"text\", \"text\": \"[tlmforge] WARNING: enforcement hook error — mutation gate bypassed. Run tlmforge:doctor to diagnose.\"}. Claude Code surfaces stdout hook output in the conversation thread, making the failure visible without requiring doctor."
+    }
+  ]
+}

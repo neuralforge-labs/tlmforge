@@ -1,0 +1,97 @@
+{
+  "reviewer": "architect-reviewer",
+  "schema_version": "1.0",
+  "iteration": 1,
+  "status": "ok",
+  "verdict": "needs_revision",
+  "findings": [
+    {
+      "severity": "critical",
+      "category": "bug",
+      "file": "specs/enforcement-hooks/README.md",
+      "line": null,
+      "finding": "Phase 2 deny output format is wrong. The plan emits `{hookSpecificOutput: {permissionDecision: 'deny', ...}}` as JSON stdout. Real Claude Code plugins (security-guidance, hookify, installed on this machine) use `sys.exit(2)` with the block message on stderr. Using the wrong mechanism means Hook 2 either silently passes (JSON stdout ignored for deny) or produces a confusing error — both defeat the gate.",
+      "suggested_fix": "Implement the deny path as `sys.exit(2)` + block message written to stderr. Do NOT rely solely on the hookSpecificOutput JSON deny shape without an explicit integration test confirming it actually blocks the tool call. Add a Phase 2 test case that asserts the hook process exits with code 2 on the deny path."
+    },
+    {
+      "severity": "critical",
+      "category": "bug",
+      "file": "specs/enforcement-hooks/README.md",
+      "line": null,
+      "finding": "hooks.json is specified as `.claude-plugin/hooks.json` (primary) or `plugin/hooks/hooks.json` (alternative). Both are wrong. Every real Claude Code plugin on this machine uses `hooks/hooks.json` at the plugin root — the `.claude-plugin/` directory contains ONLY `plugin.json` metadata. Placing hooks.json inside `.claude-plugin/` will cause Claude Code to ignore it on `claude plugin add`, silently shipping a no-op enforcement layer.",
+      "suggested_fix": "Use `hooks/hooks.json` at the plugin root (same level as `.claude-plugin/`, `agents/`, `skills/`). Hook script paths reference `${CLAUDE_PLUGIN_ROOT}/hooks/*.py`. Update all Scope bullet and Phase 0 references from `.claude-plugin/hooks.json` to `hooks/hooks.json`."
+    },
+    {
+      "severity": "critical",
+      "category": "architecture",
+      "file": "specs/enforcement-hooks/README.md",
+      "line": null,
+      "finding": "Hook 2 skill-detection depends on reading a transcript file via `transcript_path` from the PreToolUse stdin payload. Real PreToolUse hooks (security-guidance, hookify) only read `session_id`, `tool_name`, `tool_input`, `cwd` from stdin — none of them access a transcript file. If `transcript_path` is absent from the PreToolUse payload or the transcript JSONL format differs from assumed, Hook 2's skill-detection logic silently fails and passes all mutations (fail-open), making the gate a no-op.",
+      "suggested_fix": "Phase 0 must include an empirical validation step: deploy a diagnostic PreToolUse hook that logs the full stdin JSON to a temp file. Verify `transcript_path` is present and document the JSONL entry shape for tool calls before implementing `_lib/transcript.py`. If `transcript_path` is absent, pivot to a marker-file approach: Hook 1 writes a session-scoped marker when the skill is invoked; Hook 2 reads that marker file instead of the transcript."
+    },
+    {
+      "severity": "critical",
+      "category": "architecture",
+      "file": "specs/enforcement-hooks/README.md",
+      "line": null,
+      "finding": "Hook 3 depends on `verdict_sha` in `final_audit_*.json`. The schema gains the field in Phase 3 and the SKILL.md instruction for reviewers to emit it lands in Phase 4. But Stage 5 subagent reviewers will NOT run `git rev-parse HEAD` and record the SHA unless the Stage 5 launch prompt template explicitly instructs them to. The current SKILL.md Stage 5 launch prompt template says only 'Output: final_audit_<role>.json (per JSON schema)' — no mention of git or SHA recording. Without this explicit step, verdict_sha will never be populated and Hook 3 gates nothing for real features.",
+      "suggested_fix": "Phase 4 SKILL.md update MUST add to the Stage 5 launch prompt template: 'Before writing your JSON output, run `git rev-parse HEAD` and record the result as `verdict_sha` in your JSON — required for Hook 3 post-commit gating.' Also consider merging this SKILL.md change into Phase 3 (alongside the schema update) so the field is emittable the moment Phase 3 ships, rather than waiting for Phase 4."
+    },
+    {
+      "severity": "high",
+      "category": "bug",
+      "file": "specs/enforcement-hooks/README.md",
+      "line": null,
+      "finding": "UserPromptSubmit output key mismatch. The plan emits `hookSpecificOutput.additionalContext`. The hookify `userpromptsubmit.py` (installed, production) uses `{\"systemMessage\": \"...\"}` as the JSON stdout key for context injection. If `additionalContext` is silently ignored, the Hook 1 reminder never appears in Claude's context — exactly the failure mode the hook is designed to prevent.",
+      "suggested_fix": "Use `{\"systemMessage\": \"<reminder text>\"}` as the JSON stdout payload for UserPromptSubmit. Add a Phase 1 integration test that verifies the reminder text is actually visible in Claude's context (not just that the hook exits 0)."
+    },
+    {
+      "severity": "high",
+      "category": "logic_error",
+      "file": "specs/enforcement-hooks/README.md",
+      "line": null,
+      "finding": "Hook 3 multi-feature logic is contradictory. The Phase 3 implementation globs all `specs/*/agent_verification/final_audit_*.json` and picks the single most-recent by mtime (one global verdict). The risk audit table says 'both get gated independently.' These are incompatible. With the global approach: Feature A has Stage 5 at SHA 100, Feature B is in active development at HEAD SHA 110 — Hook 3 blocks Feature B's commits because it sees Feature A's verdict_sha (100) != HEAD (110), even though Feature B has never had a Stage 5 audit.",
+      "suggested_fix": "Pick one semantics and make the implementation match. Simplest correct approach: Hook 3 resolves the 'active feature' by finding the `specs/` subdirectory with the most-recently-modified file in the current session, then gates only against that feature's final_audit files. Or: gate conservatively if ANY feature has a verdict_sha that doesn't match HEAD AND no 5b marker exists — but document this cross-feature strictness explicitly as intended behavior."
+    },
+    {
+      "severity": "high",
+      "category": "documentation",
+      "file": "specs/enforcement-hooks/README.md",
+      "line": null,
+      "finding": "Hook 3 (Phase 3) ships before Stage 5b workflow is documented in SKILL.md (Phase 4). During the Phase 3-to-Phase-4 window, Hook 3 blocks commits and tells Claude to 'run Stage 5b re-review' — but no document defines this workflow. Additionally, SKILL.md currently defines 'Stage 5b' as spec-drift review (LL-2), creating a naming collision with the new post-commit re-review meaning. Claude will be blocked with no actionable path.",
+      "suggested_fix": "Either (a) ship Phase 4 SKILL.md changes concurrently with Phase 3 Hook 3, or (b) make Hook 3's block message self-contained: spell out the action inline without referring to 'Stage 5b'. Resolve the naming collision by using a distinct label (e.g., 'Stage 5-commit' or 'post-Stage-5 re-review') for the new concept."
+    },
+    {
+      "severity": "medium",
+      "category": "logic_error",
+      "file": "specs/enforcement-hooks/README.md",
+      "line": null,
+      "finding": "Override phrase 'minimal' is matched as a case-insensitive substring. Natural task descriptions containing 'minimal' ('add minimal logging', 'minimal config', 'keep it minimal') would disable Hook 2 for the entire task window unintentionally. The user's CLAUDE.md lists 'minimal' as an override, but substring matching creates too many false triggers.",
+      "suggested_fix": "Match 'minimal' as a word-boundary token (e.g., `\\bminimal\\b` regex) rather than bare substring. Alternatively require the phrase 'be minimal' or treat it as the user's phrasing permits. Add a Phase 0 test in `test_overrides.py` that verifies 'minimal' as a substring of an unrelated word does NOT trigger the override."
+    },
+    {
+      "severity": "medium",
+      "category": "architecture",
+      "file": "specs/enforcement-hooks/README.md",
+      "line": null,
+      "finding": "The architecture diagram lists `CI=true` and `GITHUB_ACTIONS` as bypass conditions alongside `TLMFORGE_HOOKS=0`. The spec_audit (F3) explicitly rejected auto-detect of CI env vars as 'too magical.' Including them in the diagram creates implementation ambiguity — a developer implementing from the plan could add CI detection that the spec_audit rejected.",
+      "suggested_fix": "Remove `CI=true` and `GITHUB_ACTIONS` from the bypass list in the architecture diagram. `TLMFORGE_HOOKS=0` is the sole bypass. Document in README install section that CI pipelines should set `TLMFORGE_HOOKS=0`."
+    },
+    {
+      "severity": "medium",
+      "category": "missing_error_handling",
+      "file": "specs/enforcement-hooks/README.md",
+      "line": null,
+      "finding": "Phase 0 ships an empty `hooks/hooks.json` to validate the manifest loads. However, the plan doesn't address the upgrade path for existing tlmforge users who do `claude plugin update` — if `hooks/hooks.json` didn't exist in the prior version and Claude Code errors on a missing hooks manifest during the update window, existing users' sessions could be disrupted.",
+      "suggested_fix": "Ship a no-op `hooks/hooks.json` (`{\"hooks\": {}}`) as the FIRST commit in Phase 0, before any hook scripts are written. Verify that `hooks/hooks.json` absent in a prior plugin version is handled gracefully by Claude Code (no error on update to a version that adds it)."
+    },
+    {
+      "severity": "low",
+      "category": "race_condition",
+      "file": "specs/enforcement-hooks/README.md",
+      "line": null,
+      "finding": "Two simultaneous Claude Code sessions on the same repo could race on the Stage 5b marker file write. The plan notes atomic write in the risk table but does not specify it in the Phase 3 implementation steps, leaving it as an implicit 'to be determined in implementation.'",
+      "suggested_fix": "Phase 3 implementation steps must explicitly specify atomic write for Stage 5b marker files: write to `<final-path>.tmp`, then `os.replace()` (atomic on POSIX). Add a Phase 3 test case for concurrent writes to the same marker file."
+    }
+  ]
+}

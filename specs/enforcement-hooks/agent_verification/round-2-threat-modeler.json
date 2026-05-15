@@ -1,0 +1,26 @@
+{
+  "reviewer": "threat-modeler",
+  "schema_version": "1.0",
+  "iteration": 2,
+  "status": "ok",
+  "verdict": "approve_with_warnings",
+  "findings": [
+    {
+      "severity": "low",
+      "category": "observability",
+      "file": "architecture",
+      "line": null,
+      "finding": "NOT_FIXED (intentional deferral): The fail-open wrapper (safe.py) still writes warning only to stderr and exits 0. Claude Code may not surface stderr from a hook that exits 0. If Hook 2 crashes on every invocation, enforcement is silently disabled with no in-band signal. The planned remedy (tlmforge:doctor, Phase 6) is optional and deferred.",
+      "suggested_fix": null,
+      "notes": "Round 1 LOW finding. No fix in round-1-fixes.md. Severity remains low for a single-user CLI tool — the failure mode is reduced enforcement, not data loss."
+    },
+    {
+      "severity": "medium",
+      "category": "documentation",
+      "file": "architecture",
+      "line": null,
+      "finding": "NEW: Hook 1 reminder text (Phase 1) advertises bypass phrases 'minimal' and 'trivial' that Hook 2's overrides.py no longer accepts (removed in EC-5/MEDIUM-2 fix). The reminder says: 'include be quick, minimal, trivial, or just do it in your prompt.' Hook 2 only accepts ['be quick', 'just do it', 'trivial fix']. A user following Hook 1's own instructions will be blocked by Hook 2 with no explanation of why the advertised phrase failed. This does not cause silent enforcement failure — Hook 2 still blocks correctly — but it contradicts the design assumption that Hook 1's advertised phrases match Hook 2's actual phrase list.",
+      "suggested_fix": "Update the Hook 1 reminder text to list only the three compound phrases that Hook 2 actually accepts: 'be quick', 'trivial fix', 'just do it'. Also audit the Hook 2 and Hook 3 block messages to ensure they list the same three phrases consistently."
+    }
+  ]
+}

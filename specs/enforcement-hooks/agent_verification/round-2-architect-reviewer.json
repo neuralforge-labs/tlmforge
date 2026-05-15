@@ -1,0 +1,41 @@
+{
+  "reviewer": "architect-reviewer",
+  "schema_version": "1.0",
+  "iteration": 2,
+  "status": "ok",
+  "verdict": "needs_revision",
+  "findings": [
+    {
+      "severity": "critical",
+      "category": "bug",
+      "file": "specs/enforcement-hooks/README.md",
+      "line": 281,
+      "finding": "Hook 1 reminder text (Phase 1, lines 281-282) tells users 'include `be quick`, `minimal`, `trivial`, or `just do it` in your prompt' to bypass enforcement. But the override library explicitly removes bare 'minimal' and 'trivial' from the accepted list (lines 237-238, 565-566). Hook 2 and Hook 3 will not honor these phrases. A user who reads the in-context reminder and types 'minimal' or 'trivial' in their next prompt will still be blocked — the hook promises one behavior and delivers another. This regression was introduced by the M1 fix, which correctly updated the library but left the user-facing text unchanged.",
+      "suggested_fix": "Update the Phase 1 reminder text (lines 281-282) to list the actual accepted override phrases: `be quick`, `just do it`, `trivial fix`. Remove `minimal` and `trivial` from the reminder. The injected systemMessage is the primary user-visible contract; it must match the implementation."
+    },
+    {
+      "severity": "medium",
+      "category": "documentation",
+      "file": "specs/enforcement-hooks/README.md",
+      "line": 623,
+      "finding": "Verification Criteria checklist (line 623) still reads 'All 3 hooks ship in `hooks/`, wired in `.claude-plugin/hooks.json`'. The path `.claude-plugin/hooks.json` was the bug that C2 fixed — implementation guidance throughout the plan correctly uses `hooks/hooks.json`, but this checklist item was not updated. An implementer checking completion against this line would pass it against the wrong path.",
+      "suggested_fix": "Change line 623 to: 'All 3 hooks ship in `hooks/`, wired in `hooks/hooks.json`'."
+    },
+    {
+      "severity": "low",
+      "category": "documentation",
+      "file": "specs/enforcement-hooks/README.md",
+      "line": 634,
+      "finding": "Verification Criteria (line 634) reads 'SKILL.md has Stage 0 + Stage 5b post-commit subsection'. The H3 fix renamed 'Stage 5b post-commit' to 'PSR (post-Stage-5 re-review)' throughout all implementation sections — but this checklist item was not updated and still uses the deprecated Stage 5b label.",
+      "suggested_fix": "Change line 634 to: 'SKILL.md has Stage 0 + PSR (post-Stage-5 re-review) subsection'."
+    },
+    {
+      "severity": "nit",
+      "category": "test_coverage",
+      "file": "specs/enforcement-hooks/README.md",
+      "line": 495,
+      "finding": "Phase 5 integration test only verifies that Hook 3 allows after BOTH PSR markers are added simultaneously. The implementation implies both red-team and architect PSR files are required. The test should include a step verifying Hook 3 remains blocked when only one of the two PSR files exists, confirming the dual-file requirement is enforced.",
+      "suggested_fix": "Add a step between 'Stage 5 verdict written' and 'Add PSR marker': add only the red-team PSR file → verify Hook 3 still blocks. Then add the architect PSR file → verify Hook 3 allows. This confirms both files are required, not just one."
+    }
+  ]
+}
