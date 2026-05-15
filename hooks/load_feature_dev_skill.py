@@ -8,6 +8,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '_lib'))
 from env import is_hooks_disabled
 from safe import fail_open
 
+MARKER_DIR = os.environ.get("TLMFORGE_MARKER_DIR") or os.path.expanduser("~/.cache/tlmforge")
+
 REMINDER = (
     "Before responding, invoke `Skill(tlmforge:feature-development)`. "
     "The skill's Stage 0 exits cleanly if this isn't a work request; "
@@ -25,10 +27,19 @@ def main():
         sys.exit(0)
 
     try:
-        json.load(sys.stdin)  # consume stdin; payload not needed for Hook 1
+        payload = json.load(sys.stdin)
     except (json.JSONDecodeError, ValueError):
-        pass  # fail-open handled by @fail_open for unexpected errors;
-              # for invalid JSON on a reminder hook, still emit the reminder
+        payload = {}
+
+    # Delete session marker on each new user prompt — resets the task window
+    # so skill approval from a prior task can't carry into the new one.
+    session_id = payload.get("session_id", "")
+    if session_id:
+        marker = os.path.join(MARKER_DIR, f"skill_invoked_{session_id}")
+        try:
+            os.remove(marker)
+        except FileNotFoundError:
+            pass
 
     print(json.dumps({"systemMessage": REMINDER}))
     sys.exit(0)

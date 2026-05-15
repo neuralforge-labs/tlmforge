@@ -200,3 +200,50 @@ def test_missing_transcript_path_key_fails_open():
     payload = {"session_id": "s1", "tool_name": "Edit", "tool_input": {}}
     rc, stderr = run_hook2(payload)
     assert rc == 0  # fail open — no transcript info available
+
+
+# --- Same-turn marker tests (loop bug regression) ---
+
+def test_same_turn_no_marker_blocks(tmp_path):
+    """Pre-fix state: Skill called same-turn but transcript not yet updated → blocks.
+    This is exactly what caused the infinite loop."""
+    entries = [user_entry("add feature X")]  # only user msg, Skill NOT in transcript yet
+    payload = make_payload("Bash", cmd="echo hello")
+    rc, _ = run_hook2(payload, transcript_entries=entries)
+    assert rc == 2  # must block — no marker, no skill in transcript
+
+
+def test_same_turn_marker_allows(tmp_path):
+    """Fix: Skill fired (PostToolUse wrote marker) but transcript not yet updated.
+    Hook 2 must check marker first and allow, not block and loop."""
+    marker_dir = tmp_path / "markers"
+    marker_dir.mkdir()
+    (marker_dir / "skill_invoked_test-session").write_text("")
+
+    entries = [user_entry("add feature X")]  # no skill_entry — simulates mid-turn state
+    payload = make_payload("Bash", cmd="echo hello")
+    rc, _ = run_hook2(payload, transcript_entries=entries,
+                      env_extra={"TLMFORGE_MARKER_DIR": str(marker_dir)})
+    assert rc == 0  # marker present → allow despite transcript gap
+
+
+def test_hook1_resets_marker(tmp_path):
+    """UserPromptSubmit must delete the marker so a new task can't inherit prior approval."""
+    import subprocess
+    HOOK1 = os.path.join(os.path.dirname(__file__), '..', 'load_feature_dev_skill.py')
+    marker_dir = tmp_path / "markers"
+    marker_dir.mkdir()
+    session_id = "test-session-reset"
+    marker_file = marker_dir / f"skill_invoked_{session_id}"
+    marker_file.write_text("")
+    assert marker_file.exists()
+
+    env = os.environ.copy()
+    env.pop("TLMFORGE_HOOKS", None)
+    env["TLMFORGE_MARKER_DIR"] = str(marker_dir)
+    subprocess.run(
+        [sys.executable, HOOK1],
+        input=json.dumps({"session_id": session_id, "prompt": "new task"}),
+        capture_output=True, text=True, env=env,
+    )
+    assert not marker_file.exists(), "Hook 1 must delete marker on new user prompt"
