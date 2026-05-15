@@ -26,6 +26,10 @@
     "verdict": {
       "enum": ["approve", "approve_with_warnings", "needs_revision", "do_not_ship"]
     },
+    "verdict_sha": {
+      "type": "string",
+      "description": "40-char git SHA of HEAD at the time the Stage 5 audit was recorded. MUST be present in final_audit_*.json files (Stage 5); absent/optional on Stage 3 review files. Intentionally not in the top-level 'required' array because Stage 3 and Stage 5 files share this schema — Hook 3 enforces its presence at runtime on Stage 5 files."
+    },
     "findings": {
       "type": "array",
       "items": {
