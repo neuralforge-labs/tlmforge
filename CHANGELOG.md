@@ -1,5 +1,54 @@
 # Changelog
 
+## 0.5.5 (2026-05-15)
+
+### Enforcement hooks — three-hook automatic gate system
+
+tlmforge now ships three Claude Code hooks that fire automatically after
+`claude plugin add`. No manual configuration required.
+
+**Hook 1 — skill reminder (UserPromptSubmit)**
+Injects a `systemMessage` before every response reminding Claude to invoke
+`tlmforge:feature-development` before doing any work. The skill's Stage 0
+exits cleanly for conversational/read-only prompts — the reminder is
+low-friction for non-work messages.
+
+**Hook 2 — mutation gate (PreToolUse: Edit/Write/Bash/MultiEdit)**
+Blocks all file mutations if `tlmforge:feature-development` was not invoked
+in the current task window. Override phrases (`be quick` / `just do it` /
+`trivial fix`) bypass the gate for that single task. Bare "minimal" or
+"trivial" are rejected (too common in technical prose).
+
+**Hook 3 — post-Stage-5 gate (PreToolUse: Bash git/gh)**
+Blocks `git commit`, `git push`, and `gh pr merge/create` if HEAD has drifted
+past the SHA recorded in the Stage 5 final audit JSON (`verdict_sha` field).
+Unblock by writing a PSR marker (`final_audit_<role>_psr_<HEAD>.json` with
+matching internal `verdict_sha`) or setting `TLMFORGE_HOOKS=0`.
+
+**Bypass options**
+- `TLMFORGE_HOOKS=0` (or `false`/`no`/`off`) — disables all hooks for the session
+- Override phrases in prompt — bypasses Hook 2 per-task
+- `claude plugin remove tlmforge` — removes all hooks permanently
+
+**SKILL.md additions**
+- Stage 0 early-exit: skill exits cleanly for conversational/read-only prompts
+- Active-feature marker: Stage 1 writes `specs/.tlmforge_active_feature`; Stage 7 deletes it
+- PSR (post-Stage-5 re-review) workflow documented
+- Stage 5 launch prompt now requires `verdict_sha` in audit JSON output
+- LL-6b wire-test rule: UI integration tests must exercise the full wire path
+
+**review_schema.json**
+Added optional `verdict_sha` field for Stage 5 final audit files.
+
+### Migration
+
+No breaking changes. Hook behavior is additive. Existing features in `specs/`
+without a `.tlmforge_active_feature` marker are unaffected by Hook 3 (it
+passes through when no marker exists). Hook 2 passes through sessions where
+the transcript path is absent (older Claude Code versions).
+
+---
+
 ## 0.5.4 (2026-05-13)
 
 ### License: UNLICENSED → MIT
