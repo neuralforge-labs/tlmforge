@@ -762,40 +762,103 @@ Detect UI condition with a generic file-extension/path heuristic (e.g.
 Android `res/layout/`). When uncertain, fall through to "no UX review" —
 no false-positive risk.
 
+### Checkpoints — carry context across phases without re-reading
+
+Each reviewer writes a checkpoint at the end of every phase review. The next
+phase's launch prompt reads that checkpoint instead of re-reading every file
+from scratch. This keeps per-agent cost flat regardless of how many phases
+have run.
+
+**Checkpoint location:** `specs/<feature>/agent-checkpoints/<role>-phase-N.md`
+
+**Checkpoint format (keep under 3K tokens):**
+
+```markdown
+# <role> checkpoint — Phase N — format_version: 1
+
+## Skip list (unchanged files — do NOT re-read unless in next phase's evidence)
+- `path/to/file.ts` — <one-line summary of what you know: interface shape, etc.>
+- `path/to/test.ts` — <test structure, mock strategy>
+
+## Changed this phase (re-read fresh if they reappear in a future evidence file)
+- `path/to/modified.ts` — <what changed and why it matters>
+
+## Patterns established (reuse in next phase)
+- Auth: <how ownership is checked>
+- Error handling: <pattern>
+- Test structure: <framework + mock approach>
+
+## Running concerns (carry forward)
+- <any unresolved medium/low that next phase might worsen — or "none">
+
+## Next phase scope (from spec)
+- Files expected to change: <list from README.md §Phase N+1>
+```
+
+When the checkpoint approaches 3K tokens, drop skip-list entries for files with
+no open concerns first. Always keep all "Running concerns" and "Changed this phase"
+entries.
+
 ### Round 1 launch prompt template (each reviewer)
 
 ```
-You are reviewing the phase diff for <FEATURE> Phase <N>.
+You are reviewing Phase <N> of <FEATURE>.
 This is ROUND 1 of phase-end verification.
 
-Feature dir:       specs/<feature>/
-Phase spec:        specs/<feature>/phase-N-<topic>.md   (the promise)
-Phase evidence:    specs/<feature>/phase-N-evidence.md  (the receipt)
-Phase start SHA:   <PHASE_START_SHA>
-Scope:             git diff ${PHASE_START_SHA}..HEAD only — cross-phase
-                   concerns are NOT in scope at phase end (Stage 5 covers those).
-Iteration: 1
+## Step 1 — Load prior context (do this FIRST, before reading anything else)
 
-Your role-specific framing:
+If N > 1 and specs/<feature>/agent-checkpoints/<your-role>-phase-<N-1>.md exists,
+read it. It contains patterns and files from prior phases.
+Skip Phase 1 (no prior checkpoint exists — proceed to Step 2).
+
+**Skip-list rule:** files in the checkpoint's "Skip list" section do NOT need
+re-reading UNLESS they also appear in phase-<N>-evidence.md as modified. If a
+file appears in both the skip list and the evidence, read only its changed
+sections (do not re-read the whole file).
+
+## Step 2 — Read the scope contract (two files only)
+
+1. specs/<feature>/README.md — find the §Phase <N> section only (read until
+   the next §Phase header). Do not read the full README.
+2. specs/<feature>/phase-<N>-evidence.md — the exact list of new/modified files
+   and the test output. This is your authoritative file list.
+
+## Step 3 — Read the delta (only what evidence lists as changed)
+
+Read each file listed in phase-<N>-evidence.md under "New files" and
+"Modified files". For modified files, read only the changed sections unless
+your checkpoint says you already know the file's full structure.
+Do not read any file not listed in evidence.
+
+## Step 4 — Apply your role lens
+
+Phase start SHA: <PHASE_START_SHA>
+Scope: phase diff only — cross-phase concerns are Stage 5's job.
+
 - code-reviewer:  TDD compliance, pattern consistency, security on impl,
-                  no dead code, no surprises. Apply your full checklist
-                  to the phase diff only.
+                  no dead code, no surprises. Delta only.
 - tester:         Read agent_verification/tester_edge_cases.json. For each
-                  edge case, confirm a test exists in the phase diff at the
-                  right layer (unit/integration/E2E). RUN THE SUITE
-                  YOURSELF and cross-check against phase-N-evidence.md
-                  claimed numbers — discrepancy is CRITICAL.
-- phase-auditor:  Promise-vs-delivered. Was every "in scope" item in
-                  phase-N-spec.md delivered? Were the promised tests
-                  delivered, at the right layer, and passing? Do not
-                  opine on architecture or edge cases.
-- ux-reviewer:    Accessibility + platform-convention check on the UI
-                  files in the phase diff. Scope to phase diff only,
-                  not whole-app UX.
+                  CRITICAL/HIGH edge case, confirm a test exists at the
+                  right layer. RUN THE SUITE and cross-check against
+                  phase-<N>-evidence.md claimed numbers — discrepancy
+                  is CRITICAL.
+- phase-auditor:  Promise-vs-delivered only. Was every in-scope item from
+                  the README §Phase <N> delivered? Promised tests present
+                  and passing? Do not opine on architecture.
+- ux-reviewer:    Accessibility + platform conventions on UI files in the
+                  delta only. Not whole-app UX.
 
-Output BOTH:
-- specs/<feature>/phase-N-verification/<your-role>.md   (prose)
-- specs/<feature>/phase-N-verification/<your-role>.json (per the JSON schema)
+## Step 5 — Write outputs
+
+Save BOTH:
+- specs/<feature>/phase-<N>-verification/<your-role>.md   (prose)
+- specs/<feature>/phase-<N>-verification/<your-role>.json (per JSON schema)
+
+Then write your checkpoint for the next phase:
+- specs/<feature>/agent-checkpoints/<your-role>-phase-<N>.md
+  Move files from this phase's evidence into the appropriate checkpoint section:
+  unchanged files → skip list; files you modified or found concerns in → "Changed
+  this phase". Carry forward all unresolved concerns.
 ```
 
 ### Round 2 / Round 3 (if needed)
