@@ -1,0 +1,71 @@
+{
+  "schema_version": "1.0",
+  "feature": "enforcement-hooks",
+  "produced_by": "tester-stage-3-round-1",
+  "edge_cases": [
+    {
+      "id": "EC-1",
+      "title": "Subagent session — no user messages — task window undefined",
+      "surface": "hooks/enforce_skill_invoked.py + hooks/_lib/transcript.py",
+      "expected": "Hook 2 must pass through when the transcript has no user messages (subagent session context). It must never block all subagent mutations or crash.",
+      "test_stub": "def test_hook2_subagent_transcript_no_user_messages():\n    transcript = [\n        {\"type\": \"tool_call\", \"tool_name\": \"Read\", \"tool_input\": {\"file_path\": \"/x.py\"}},\n        {\"type\": \"tool_result\", \"content\": \"file contents\"},\n    ]\n    result = run_hook2_with_transcript(transcript, tool_name=\"Edit\")\n    assert result[\"action\"] == \"allow\"  # currently: unspecified / may crash or block",
+      "source": "design"
+    },
+    {
+      "id": "EC-2",
+      "title": "Empty repo (zero commits) — git rev-parse HEAD returns exit 128",
+      "surface": "hooks/enforce_post_stage5_review.py",
+      "expected": "Hook 3 must pass through when git rev-parse HEAD fails (exit code 128, no commits in repo). Must not block with garbled HEAD=(empty string) message.",
+      "test_stub": "def test_hook3_git_no_commits(tmp_git_empty_repo, final_audit_with_verdict_sha):\n    result = run_hook3(\n        command=\"git commit -m 'init'\",\n        cwd=tmp_git_empty_repo,\n        audit_files=[final_audit_with_verdict_sha],\n    )\n    assert result[\"action\"] == \"allow\"  # currently: blocks with garbled empty-string HEAD",
+      "source": "design"
+    },
+    {
+      "id": "EC-3",
+      "title": "Short SHA in verdict_sha vs full 40-char HEAD — permanent false block",
+      "surface": "hooks/enforce_post_stage5_review.py + hooks/_lib/git.py (planned)",
+      "expected": "Hook 3 must normalize SHAs before comparison. A verdict_sha of '1424797' (7-char short) must compare equal to HEAD '1424797ed402f266d67fd54cdf0f1781dc370181' (40-char). Must not false-block when the user is at the same commit the verdict covered.",
+      "test_stub": "def test_hook3_short_verdict_sha_same_commit(repo_at_sha, final_audit_short_sha):\n    result = run_hook3(\n        command=\"git commit --amend --no-edit\",\n        verdict_sha_in_file=\"1424797\",\n        current_head_full=\"1424797ed402f266d67fd54cdf0f1781dc370181\",\n    )\n    assert result[\"action\"] == \"allow\"  # currently: blocks (short != full comparison fails)",
+      "source": "design"
+    },
+    {
+      "id": "EC-4",
+      "title": "Truncated JSONL line in transcript (partial-write race) — per-line JSONDecodeError crashes scan",
+      "surface": "hooks/_lib/transcript.py",
+      "expected": "scan_transcript_lines must catch JSONDecodeError per line, skip the malformed line, and return all fully-parsed events. Must not propagate the exception to the fail-open wrapper.",
+      "test_stub": "def test_transcript_scan_truncated_last_line():\n    raw = (\n        '{\"type\": \"tool_call\", \"tool_name\": \"Skill\", \"tool_input\": {\"skill\": \"tlmforge:feature-development\"}}\\n'\n        '{\"type\": \"tool_call\", \"tool_name\": \"Edit\", \"tool_i'  # truncated\n    )\n    events = list(scan_transcript_lines(raw))\n    skill_found = any(e.get(\"tool_name\") == \"Skill\" for e in events)\n    assert skill_found is True\n    assert len(events) == 1  # currently: raises JSONDecodeError",
+      "source": "design"
+    },
+    {
+      "id": "EC-5",
+      "title": "Override false positives — 'minimal' and 'trivial' in normal technical sentences",
+      "surface": "hooks/_lib/overrides.py",
+      "expected": "detect_override() must return False for 'the trivial solution is O(n^2)' and 'use minimal logging'. These are common technical phrases that do not represent intent to bypass discipline.",
+      "test_stub": "def test_minimal_in_technical_context_does_not_override():\n    assert detect_override(\"explain why minimal test coverage is bad\") is False  # currently: True\n\ndef test_trivial_in_math_context_does_not_override():\n    assert detect_override(\"the trivial solution to this problem is O(n^2)\") is False  # currently: True",
+      "source": "design"
+    },
+    {
+      "id": "EC-6",
+      "title": "Hook 3 glob uses cwd relative path — fails when claude is run from a subdirectory",
+      "surface": "hooks/enforce_post_stage5_review.py",
+      "expected": "Hook 3 must anchor the specs/ glob to the git repo root (via git rev-parse --show-toplevel), not to cwd. Must find and enforce Stage 5 verdicts even when cwd is a project subdirectory.",
+      "test_stub": "def test_hook3_finds_audit_from_subdirectory(tmp_repo_with_audit):\n    src_dir = tmp_repo_with_audit / \"src\"\n    src_dir.mkdir()\n    result = run_hook3(\n        command=\"git push origin main\",\n        cwd=src_dir,\n        head_sha=\"newsha\",\n        verdict_sha_in_audit=\"oldsha\",\n    )\n    assert result[\"action\"] == \"block\"  # currently: passes through (glob finds nothing from src/)",
+      "source": "design"
+    },
+    {
+      "id": "EC-7",
+      "title": "TLMFORGE_HOOKS bypass — only '0' accepted; 'false', 'off', '' do not bypass",
+      "surface": "hooks/_lib/env.py",
+      "expected": "is_hooks_enabled() must return False for all conventional 'disabled' values: '0', 'false', 'False', 'FALSE', 'no', 'off', and empty string. Exact equality to '0' is insufficient.",
+      "test_stub": "@pytest.mark.parametrize(\"value\", [\"0\", \"false\", \"False\", \"FALSE\", \"no\", \"off\", \"\"])\ndef test_tlmforge_hooks_bypass_accepted_values(value, monkeypatch):\n    monkeypatch.setenv(\"TLMFORGE_HOOKS\", value)\n    assert is_hooks_enabled() is False  # currently: only '0' returns False",
+      "source": "design"
+    },
+    {
+      "id": "EC-8",
+      "title": "verdict_sha unreachable after git rebase — git rev-list crashes Hook 3 into fail-open",
+      "surface": "hooks/enforce_post_stage5_review.py",
+      "expected": "When verdict_sha is not in the current git history (e.g., after a rebase rewrote SHAs), Hook 3 must still BLOCK (not crash into fail-open). The commit count in the message may show '?' but the block must fire.",
+      "test_stub": "def test_hook3_verdict_sha_unreachable_after_rebase(tmp_repo):\n    result = run_hook3(\n        command=\"git commit -m 'post-rebase'\",\n        verdict_sha_in_audit=\"deadbeef00000000000000000000000000000000\",\n        current_head=\"newsha\",\n    )\n    assert result[\"action\"] == \"block\"  # currently: git rev-list crashes -> fail-open -> allows",
+      "source": "design"
+    }
+  ]
+}

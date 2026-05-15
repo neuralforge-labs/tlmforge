@@ -1,0 +1,25 @@
+{
+  "reviewer": "tester",
+  "schema_version": "1.0",
+  "iteration": 2,
+  "status": "ok",
+  "verdict": "approve_with_warnings",
+  "findings": [
+    {
+      "severity": "medium",
+      "category": "documentation",
+      "file": "hooks/load_feature_dev_skill.py",
+      "line": null,
+      "finding": "Phase 1 reminder text (README.md line 283) lists 'minimal' and 'trivial' as bypass phrases: 'include `be quick`, `minimal`, `trivial`, or `just do it` in your prompt.' The EC-5 fix correctly removed these from the override logic in Phase 0 overrides.py and Phase 2 enforce_skill_invoked.py, but the user-facing reminder text was not updated. A user who reads the reminder and types 'use minimal config' or 'trivial solution: change X' will expect bypass but get blocked. The hook logic is correct; the documentation contradicts it.",
+      "suggested_fix": "Update the Phase 1 reminder text to list only the three retained override phrases: 'To bypass enforcement on this message, include `be quick`, `just do it`, or `trivial fix` in your prompt.' Update test_hook1_normal.py to assert the emitted systemMessage text does not contain bare 'minimal' or 'trivial' as standalone override instructions."
+    },
+    {
+      "severity": "low",
+      "category": "bug",
+      "file": "hooks/enforce_post_stage5_review.py",
+      "line": null,
+      "finding": "Phase 3 spec anchors the final_audit glob to git rev-parse --show-toplevel (EC-6 fix) but does not anchor the read of specs/.tlmforge_active_feature to repo root. If the user runs claude from a project subdirectory, the marker file read uses cwd-relative path, finds nothing, and Hook 3 passes through silently as if no active feature exists. The EC-6 fix is necessary but not sufficient — both IO operations (marker read and glob) must use the repo-root-anchored path. The listed test test_hook3_cwd_subdirectory.py does not explicitly verify that the marker file read is also resolved from repo root.",
+      "suggested_fix": "Add to Phase 3 spec: 'Read <repo_root>/specs/.tlmforge_active_feature anchored to git rev-parse --show-toplevel output, not to cwd.' Update test_hook3_cwd_subdirectory.py to explicitly assert the active-feature marker is found when cwd is a subdirectory (not just that the glob finds the correct audit files)."
+    }
+  ]
+}

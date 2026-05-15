@@ -1,0 +1,1 @@
+{"type": "assistant", "message": {"role": "assistant", "content": [{"type": "tool_use", "id": "toolu_sample", "name": "Skill", "input": {"skill": "tlmforge:feature-development", "args": "sample args"}}]}}

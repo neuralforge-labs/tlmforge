@@ -1,0 +1,117 @@
+{
+  "reviewer": "tester",
+  "schema_version": "1.0",
+  "iteration": 1,
+  "status": "ok",
+  "verdict": "needs_revision",
+  "findings": [
+    {
+      "severity": "critical",
+      "category": "logic_error",
+      "file": "hooks/enforce_skill_invoked.py",
+      "line": null,
+      "finding": "Subagent sessions have no user messages — task window definition breaks down. Hook 2's 'since last user message' anchor finds nothing; fallback behavior is unspecified. Sub-case A: fails open silently (no enforcement on all subagent mutations). Sub-case B: blocks all subagent mutations (breaks stage execution). Both outcomes are wrong. The plan must define: if transcript has no user messages, treat as pass-through (subagent context).",
+      "suggested_fix": "In transcript.py, add a function `has_user_messages(events) -> bool`. In enforce_skill_invoked.py, if `has_user_messages` returns False, emit pass-through immediately. Document in Phase 2 tests with a fixture that has zero user messages. Optionally: check Claude Code hook payload for a session-type field to distinguish main vs subagent sessions."
+    },
+    {
+      "severity": "critical",
+      "category": "missing_error_handling",
+      "file": "hooks/enforce_post_stage5_review.py",
+      "line": null,
+      "finding": "git rev-parse HEAD returns exit code 128 in a repo with zero commits (freshly git init, before first commit). stdout is empty string. Comparison '' == verdict_sha is False. Hook then looks for 5b marker with empty SHA in filename, finds nothing, checks override, then blocks git commit. User in a fresh repo with a leftover final_audit JSON from a prior project is permanently blocked.",
+      "suggested_fix": "After subprocess call to git rev-parse HEAD, check returncode. If non-zero, log warning to stderr and emit pass-through (cannot enforce without a valid HEAD SHA). Add test: tmp_empty_git_repo fixture + final_audit JSON present -> allow."
+    },
+    {
+      "severity": "critical",
+      "category": "bug",
+      "file": "hooks/enforce_post_stage5_review.py",
+      "line": null,
+      "finding": "SHA length mismatch causes permanent false blocks. If a reviewer records a short hash (7 chars) as verdict_sha (e.g., by copying from a GitHub URL or using git rev-parse --short), Hook 3 compares short_sha != full_40char_head and concludes HEAD has drifted. The 5b marker glob also fails if written with short SHA. The block is permanent: no commit sequence can clear it without TLMFORGE_HOOKS=0.",
+      "suggested_fix": "Normalize all SHAs to full 40-char before any comparison. Use `git rev-parse <sha>` to expand short hashes. Add this normalization in _lib/transcript.py or a new _lib/git.py helper. Explicitly state in the SKILL.md Stage 5 prompt template: 'Use git rev-parse HEAD (not --short) for verdict_sha.' Add test with verdict_sha='1424797' and HEAD='1424797ed402...' -> allow."
+    },
+    {
+      "severity": "critical",
+      "category": "race_condition",
+      "file": "hooks/_lib/transcript.py",
+      "line": null,
+      "finding": "Transcript file is written incrementally by Claude Code (JSONL, one line per event). Hook 2 fires via PreToolUse while the session is active. The last line in the transcript may be truncated mid-write (the current tool_call event being logged has not yet had its closing brace flushed). json.loads() on the truncated line raises JSONDecodeError. If transcript.py does not catch exceptions per-line, the exception propagates to the fail-open wrapper, which exits 0. Hook silently allows regardless of skill invocation status.",
+      "suggested_fix": "In transcript.py line iterator: wrap json.loads(line) in try/except json.JSONDecodeError; on exception, log to stderr at DEBUG level and continue (skip the line). This is correct semantics: a truncated line means the event is not yet complete. Add test: scan_transcript_lines with a truncated last line -> returns only fully-parsed events."
+    },
+    {
+      "severity": "high",
+      "category": "logic_error",
+      "file": "hooks/_lib/overrides.py",
+      "line": null,
+      "finding": "Override phrases 'minimal' and 'trivial' are common English words in technical discourse. 'use minimal logging', 'the trivial solution is O(n^2)', 'minimal test coverage is bad practice', 'trivially false assumption' all trigger override via substring match. A user writing a technical question that happens to contain these words silently bypasses Hook 2 and Hook 3 for the immediately following mutations. The enforcement guarantee is undermined by normal language use.",
+      "suggested_fix": "Remove 'minimal' and 'trivial' as standalone override phrases. Tighten the override list to phrases that are inherently deliberate bypass signals: ['be quick', 'just do it']. If 'minimal' and 'trivial' must remain, require them as the dominant content of a short message (e.g., message length < 20 chars and contains only the phrase). Update test_overrides.py to cover the false-positive cases explicitly."
+    },
+    {
+      "severity": "high",
+      "category": "bug",
+      "file": "hooks/enforce_post_stage5_review.py",
+      "line": null,
+      "finding": "Hook 3 globs specs/*/agent_verification/final_audit_*.json using a relative path from cwd. When user runs claude from a project subdirectory (cd src/ && claude), cwd is not the repo root. The glob finds nothing, Hook 3 concludes 'no Stage 5 yet', passes through. The Stage 5 verdict is silently ignored. This is the exact failure mode the feature was designed to prevent.",
+      "suggested_fix": "Use git rev-parse --show-toplevel to find the repo root before globbing. Glob from <repo_root>/specs/*/agent_verification/final_audit_*.json. If git rev-parse --show-toplevel fails (not a git repo), treat as 'no Stage 5 yet' and pass-through. Add test with cwd set to a subdirectory of a temp repo that has a final_audit JSON at the root level."
+    },
+    {
+      "severity": "high",
+      "category": "bug",
+      "file": "hooks/_lib/env.py",
+      "line": null,
+      "finding": "The plan says 'honor TLMFORGE_HOOKS=0' but does not specify exact match semantics. If the implementation uses os.environ.get('TLMFORGE_HOOKS') == '0' (exact equality), then TLMFORGE_HOOKS=false, TLMFORGE_HOOKS=False, TLMFORGE_HOOKS=off, TLMFORGE_HOOKS= (empty string set by some CI scripts) all fail to bypass. Users following conventional boolean env var patterns from other tools (HUSKY=0/false, LEFTHOOK=0/false) will be surprised.",
+      "suggested_fix": "Define DISABLED_VALUES = {'0', 'false', 'no', 'off', ''} (all lowercased). Check: os.environ.get('TLMFORGE_HOOKS', '').lower() in DISABLED_VALUES. Document the accepted values in README. Add parametrized test covering all accepted values."
+    },
+    {
+      "severity": "high",
+      "category": "missing_error_handling",
+      "file": "hooks/enforce_post_stage5_review.py",
+      "line": null,
+      "finding": "When verdict_sha from the audit file is not reachable in the current git history (e.g., after a rebase that rewrote SHAs), git rev-list <verdict_sha>..<HEAD> --count exits non-zero. The hook crashes in the subprocess call. Fail-open wrapper fires, hook allows. Post-rebase commits bypass Stage 5b enforcement silently. This scenario is common: Stage 5 at SHA A, user rebases and gets SHA A' (A is gone), then commits more code.",
+      "suggested_fix": "Wrap the git rev-list call in try/except subprocess.CalledProcessError. On failure, set commit_count to '?' (unknown) for the block message, but STILL enforce the block (HEAD != verdict_sha is still true). The block message should read: 'N commits ahead (could not compute — history may have been rewritten).' Add test with a verdict_sha that is not in git history."
+    },
+    {
+      "severity": "medium",
+      "category": "logic_error",
+      "file": "hooks/enforce_post_stage5_review.py",
+      "line": null,
+      "finding": "Hook 3 pattern '^(git commit|git push|gh pr merge)' does not match 'git merge'. The architecture text mentions 'git commit/push/merge' but the actual pattern omits 'git merge'. A local branch merge that creates a merge commit (git merge feature-branch) is not gated. The merge commit content is unreviewed code that bypasses Stage 5b. The next git push IS caught, but the merge commit itself is not flagged at the point of creation.",
+      "suggested_fix": "Add 'git merge' to the pattern: '^(git commit|git push|git merge|gh pr merge)'. If this produces false positives for routine upstream syncs (git merge main), restrict to merge commits only by checking for --no-ff flag, or document the gap as a known limitation.",
+      "notes": "Low probability path — user must do local merge AND push. Gap is inconsistent with stated LL-1/LL-8 enforcement goal."
+    },
+    {
+      "severity": "medium",
+      "category": "logic_error",
+      "file": "hooks/enforce_post_stage5_review.py",
+      "line": null,
+      "finding": "Compound bash commands that prepend other commands before git commit/push bypass Hook 3's '^' anchor. 'cd /repo && git commit -m msg' does not match '^(git commit|...)'. The CLAUDE.md rule prohibits Claude from combining cd with other commands, but this does not prevent the pattern from occurring. If Claude generates such a command (e.g., in a non-tlmforge workflow), Hook 3 is bypassed.",
+      "suggested_fix": "Either (a) additionally check if the command string contains 'git commit', 'git push', or 'gh pr merge' as substrings (not just at the start), or (b) use shlex.split() and scan tokens for git subcommands. Option (b) is more robust but adds ~1ms of parsing. Document the chosen approach in the Phase 3 implementation notes.",
+      "notes": "Single-user tool; not an adversarial concern. Reliability gap only."
+    },
+    {
+      "severity": "medium",
+      "category": "test_coverage",
+      "file": "hooks/tests/test_hook2_performance.py",
+      "line": null,
+      "finding": "The plan calls for a 1MB transcript performance benchmark but does not specify the fixture structure. Our simulation shows both transcript shapes (many short lines, few very long lines) pass the 50ms budget comfortably. However, the fixture must cover BOTH shapes explicitly — real transcripts are dominated by large tool_result lines (Read tool returning file contents, 10K-100K chars per line). A fixture using only many short lines does not represent the worst-case read pattern.",
+      "suggested_fix": "Phase 0 conftest.py must include two benchmark fixtures: (a) synthetic_transcript_many_short_lines (500 lines, ~2KB each, 1MB total) and (b) synthetic_transcript_few_long_lines (20 lines, ~50KB each, 1MB total). Both must pass the <50ms p99 assertion. Add a comment in conftest.py explaining why both shapes are needed.",
+      "notes": "Both shapes pass in simulation (0.52ms and 2.58ms respectively). The finding is about fixture completeness, not a performance risk."
+    },
+    {
+      "severity": "medium",
+      "category": "documentation",
+      "file": "skills/feature-development/SKILL.md",
+      "line": null,
+      "finding": "The 5b marker filename convention 'final_audit_*_5b_<sha>.json' is not fully specified. The plan does not state: (1) which SHA to use in the filename (HEAD at time of 5b review completion, or HEAD at time of next commit), (2) whether the marker must be in specs/*/agent_verification/ or a different path, (3) what happens when the user makes additional commits after the 5b review (each subsequent commit requires a new 5b marker, or just the first post-5b commit?). Without this specification, the skill prompt and the hook implementation will produce mismatched artifacts.",
+      "suggested_fix": "Add a 'Stage 5b marker contract' section to SKILL.md and the Phase 3 implementation doc: marker filename = final_audit_<role>_5b_<reviewer-recorded-HEAD-sha>.json; semantic = Hook 3 checks if HEAD is reachable from the marker SHA via git rev-list; if HEAD is ahead of marker SHA, new 5b review required. This makes the contract explicit and testable.",
+      "notes": "Impacts both Phase 3 hook implementation and Phase 4 SKILL.md update."
+    },
+    {
+      "severity": "low",
+      "category": "test_coverage",
+      "file": "hooks/tests/",
+      "line": null,
+      "finding": "The plan lists 'test_hook2_crash.py — bad transcript path -> fail-open' but does not include a test for a missing 'transcript_path' key in the stdin JSON payload itself (as opposed to a bad path value). If Claude Code changes its hook payload schema, or if the hook is invoked by a different Claude Code version that omits this field, the hook would raise KeyError before the fail-open wrapper can catch it — depending on where the key access happens relative to the try/except boundary.",
+      "suggested_fix": "Add test_hook2_missing_transcript_field.py: stdin JSON with no 'transcript_path' key -> hook must fail open (pass-through), not raise KeyError to the process. Verify the fail-open wrapper covers this code path specifically."
+    }
+  ]
+}
