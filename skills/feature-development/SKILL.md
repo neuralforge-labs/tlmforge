@@ -1,6 +1,6 @@
 ---
 name: feature-development
-description: Use this skill for ALL feature development work — new features, non-trivial bug fixes, refactors touching 3+ files, integrations, migrations, anything that changes user-facing behavior or touches production data. The ONLY exception is very small bug fixes (typo, single-line logic fix, config change with zero behavioral impact). Triggers on ANY implementation request that isn't a trivial one-liner — "add X", "implement Y", "build Z", "integrate W", "refactor X", "migrate Y", "ship X", "make X work", "fix X" (when fix requires multi-file changes), or any feature that modifies more than one file. Enforces the spec-audit → master-plan → multi-agent-review → phase-gated TDD execution → re-review → live verification → operator tooling workflow with detailed artifacts in `specs/<feature>/` so any reviewer can audit the trail end-to-end.
+description: Use this skill for ALL implementation work beyond trivial one-liners. Handles three intensities — Light (inline TDD + self-review, no agents), Medium (abbreviated spec audit + single-round architect+tester + phase-end code-reviewer+phase-auditor), and Deep (full 7-stage recipe). Auto-classifies at Stage 0 and proceeds immediately with a one-line announcement. The user can say "go deeper" or "go lighter" to adjust at any point.
 ---
 
 # Feature Development — The Hands-Off Recipe
@@ -19,41 +19,67 @@ this recipe — read it once if you've never done a feature this way.
 
 ## When to use
 
-This skill is invoked **only after the classification gate** (defined in
-`~/.claude/CLAUDE.md`'s "Feature-Development Skill" section) routes a task to
-the **Deep** path. The decision is made by Claude main + user confirmation
-using semantic signals (security surface, persistent state, cross-module
-scope, customer-facing impact, user language) — NOT hardcoded file paths.
+This skill handles **Medium and Deep** work. Classification happens inside
+the skill at Stage 0 — auto-classify, announce, proceed without asking.
 
-If you're invoked, you're on the Deep path. Light/Minimal tasks never reach
-this skill — they're handled inline by the main agent with TDD + full test
-suite + self-review.
+- **Light** — zero new logic, diff readable in 10 seconds: handle inline with
+  TDD + self-review. Do NOT enter Stage 1. Exit the skill and handle it as the
+  main agent.
+- **Medium** — fixes or improves existing behavior, no new product surface:
+  abbreviated spec audit → fix plan → single-round review (architect + tester)
+  → TDD execution with code-reviewer + phase-auditor → phase-auditor final check.
+- **Deep** — adds new capability or surface that didn't exist: full 7-stage recipe.
 
-### Deep path — what this skill does (this whole document)
+### Classification rule
 
-The Deep path runs the full 7-stage recipe: spec audit → master plan →
-bounded 3-round plan review → phase-gated TDD execution with phase-end
-verification → dual single-shot final audit → live verification → status
-dashboard.
+**Core question:** "Am I changing what already exists, or adding something new?"
+Changing/fixing → Medium. Adding new capability → Deep.
 
-### When NOT in this skill (Light/Minimal — handled in CLAUDE.md)
+| Path | When | Examples |
+|---|---|---|
+| **Light** | Zero new logic. Diff readable in 10 sec. | Typo, rename, comment, config value, reorder imports |
+| **Medium** | Fixes or improves existing behavior. No new product surface. | Bug fix (multi-file ok), refactor a module, add missing tests, improve error-message tracing, perf fix in existing path |
+| **Deep** | Adds new capability or surface that didn't exist. | New feature, new API endpoint, new data model, new integration, new auth flow, new UI screen |
 
-If you're reading this because you were unsure: ask the classification gate
-first. The user picks Light or Deep before any planning artifacts get
-created. Producing `spec_audit.md` and `README.md` for a task the user
-wanted handled inline is the failure mode this triage prevents.
+### Announce and proceed (Stage 0 — no confirmation gate)
+
+After classifying, tell the user in one sentence and proceed immediately:
+
+- Light: exit the skill — "Going Light — [reason]. Handling inline."
+- Medium: "Going Medium — [reason]. Abbreviated spec audit → single-round architect+tester → phase-end code-reviewer+phase-auditor."
+- Deep: "Going Deep — [reason]. Full 7-stage recipe."
+
+If the user says **"go deeper"** — re-classify as one level up and restart Stage 0.
+If the user says **"go lighter"** — re-classify as one level down. Medium → Light exits the skill.
 
 ### Mid-task escalation
 
-If a task started as Light/Minimal and discovers mid-implementation that it
-expanded into Deep territory (e.g., found a security surface, scope exceeded
-~5 files, schema change appeared), the main agent **must pause and re-ask
-the classification gate**. The user may escalate to Deep, at which point
-this skill takes over from Stage 1.
+If scope expands during implementation (security surface discovered, more files
+than expected, schema change appears) — pause, announce the escalation, resume
+at the higher intensity from the appropriate stage.
 
 ---
 
 ## The recipe at a glance
+
+### Medium path
+
+```
+Stage 0: Classify → announce → proceed
+Stage 1: Abbreviated spec audit              →  specs/<f>/spec_audit.md
+         ↓  conditional gate (same rule as Deep — [GATE-BLOCKING] questions only)
+Stage 2: Fix plan                            →  specs/<f>/README.md
+         ↓  conditional gate (only if irreversible op or unapproved decision)
+Stage 3: Single-round review — parallel
+   architect-reviewer + tester               →  agent_verification/round-1-<reviewer>.{md,json}
+         ↓  main Claude fixes plan (max 1 re-run if CRITICALs remain)
+Stage 4: Phase execution (TDD, per phase)
+         Phase-end: code-reviewer + phase-auditor  →  specs/<f>/phase-N-verification/
+Stage 5: phase-auditor final compliance check →  agent_verification/final_audit_phase-auditor.{md,json}
+Stage 7: Abbreviated STATUS.md               →  specs/<f>/STATUS.md
+```
+
+### Deep path
 
 ```
 Stage 1: Feature request analysis (main)     →  specs/<f>/spec_audit.md
@@ -94,17 +120,26 @@ phase-end, Stage 5 final).
 
 ---
 
-## Stage 0 — Non-work-request early exit
+## Stage 0 — Classify and proceed
 
-The Hook 1 reminder fires on **every** user prompt. The skill's job at Stage 0
-is to exit cleanly when there's no feature to develop — so the reminder doesn't
-turn every "explain X" into a spec audit.
+The Hook 1 reminder fires on **every** user prompt. Stage 0 has two jobs:
 
-**Rule:** If the user's prompt is conversational, exploratory, or read-only —
-examples: "what does this file do?", "explain X", "summarize Y", "how does Z
-work?", "is my plan right?" — exit immediately with a one-line acknowledgement
-and handle the request inline. Do **not** produce a `spec_audit.md`, do not
-invoke the classification gate, do not create any `specs/` artifacts.
+**Job 1 — Non-work-request early exit.** If the prompt is conversational,
+exploratory, or read-only — "what does this file do?", "explain X", "summarize Y",
+"how does Z work?", "is my plan right?" — exit immediately with a one-line
+acknowledgement and handle the request inline. Do **not** produce any
+`specs/` artifacts.
+
+**Job 2 — Classify work requests.** If the prompt IS work, classify to
+Light / Medium / Deep using the rule in "When to use" above, then
+**announce and proceed immediately** — no AskUserQuestion, no confirmation gate.
+
+Announce format (one sentence, then start the appropriate path):
+- Light: "Going Light — [reason]. Handling inline with TDD + self-review." *(exit skill)*
+- Medium: "Going Medium — [reason]. Abbreviated spec audit → single-round architect+tester → phase-end code-reviewer+phase-auditor."
+- Deep: "Going Deep — [reason]. Full 7-stage recipe."
+
+If the user says "go deeper" or "go lighter" at any point — re-announce and restart.
 
 This is the only stage that can exit the skill without producing an artifact.
 All other stages produce something before advancing.
@@ -185,6 +220,36 @@ why it's a non-issue for this feature:
 - (e) Rollback safety / blast radius
 
 Padding with manufactured LOW findings is worse than fewer real ones.
+
+### Stage 1 — Medium path (abbreviated spec audit)
+
+For Medium tasks, skip the full 5-surface coverage rule. Cover only:
+
+```markdown
+# <Feature> — Spec Audit (Medium)
+
+## What broke / what needs to change
+<2-3 sentences: root cause, concrete failure mode>
+
+## Fix approach
+<What changes and why this approach over alternatives>
+
+## Files in scope
+- `path/to/file.py` — <what changes>
+
+## Rollback
+<How to revert if the fix makes things worse>
+
+## Test plan
+- <test that proves the fix is correct>
+- <regression test that catches recurrence>
+
+## Open questions
+[GATE-BLOCKING] or [INFORMATIONAL] — same gate rule as Deep applies
+```
+
+Same `[GATE-BLOCKING]` / `[INFORMATIONAL]` tagging and gate rule apply.
+Write the active-feature marker after the spec audit (same as Deep).
 
 **After writing `spec_audit.md`, write the active-feature marker:**
 
@@ -296,6 +361,33 @@ How to prove the feature works. Measurable, not subjective.
 - Sub-phases (`5b`, `5c`, `5d`) get added LATER when post-rollout review
   finds gaps. Don't pre-allocate them.
 
+### Stage 2 — Medium path (fix plan)
+
+For Medium tasks, create a simplified `specs/<feature>/README.md`:
+
+```markdown
+# <Feature> — Fix Plan (Medium)
+
+## Context
+<2-3 sentences: what broke, what the fix does, what success looks like>
+
+## Scope
+**In:** files and behaviors being changed
+**Out:** what is explicitly NOT changing
+
+## Phases
+Usually 1 phase. Each phase: goal | steps | files modified | tests added | rollback.
+
+## TDD plan
+Test files to create, what they verify, expected RED→GREEN.
+
+## Verification criteria
+How to prove the fix works and didn't break anything else.
+```
+
+**Gate rule:** same as Deep — only gate if plan introduces an irreversible
+operation or a decision the user hasn't approved.
+
 ### Stage 2 → Stage 3 gate (conditional — only when plan introduces new decisions)
 
 After writing `README.md`, evaluate whether the plan introduces **decisions or tradeoffs the
@@ -347,6 +439,28 @@ is what makes the 3-round loop affordable.
 **Not at Stage 3:** `code-reviewer` (no code yet — runs at Stage 4 phase-end);
 `red-team-reviewer` (impl-only — runs at Stage 5); `phase-auditor` (phase-bound
 — runs at Stage 4 phase-end).
+
+### Stage 3 — Medium path (single-round, 2 agents)
+
+For Medium tasks, run a **single round** with 2 agents in parallel — no
+convergence loop:
+
+```
+Agent(subagent_type="tlmforge:architect-reviewer", model="sonnet", ...)
+Agent(subagent_type="tlmforge:tester",             model="sonnet", ...)
+```
+
+No threat-modeler (no new attack surface). No red-team (code-reviewer at
+phase-end handles impl correctness). No ux-reviewer unless UI files are in scope.
+
+**After round 1:** fix plan, proceed to Stage 4. Write `agent_verification/round-1-fixes.md`
+as usual. If CRITICALs remain after fixes, run one more round (hard cap: 2 rounds
+for Medium). Unresolved after round 2 → escalate to user.
+
+**No `tester_edge_cases.json` carryover.** Read the tester's round-1 prose
+directly and build tests from it. No JSON artifact required for Medium.
+
+Write `agent_verification/SUMMARY.md` after the round(s) complete (same format as Deep).
 
 ### Round 1 — cold review (parallel)
 
@@ -746,7 +860,21 @@ PHASE_START_SHA=$(grep '^git_sha:' specs/<feature>/phase-N-state.md | awk '{prin
 git diff ${PHASE_START_SHA}..HEAD   # full phase diff
 ```
 
-### Phase-end roster (3 agents, +1 conditional)
+### Phase-end roster — Medium path (2 agents)
+
+For Medium tasks, the tester already ran at Stage 3. Phase-end uses 2 agents:
+
+```
+Agent(subagent_type="tlmforge:code-reviewer",  model="sonnet", ...)
+Agent(subagent_type="tlmforge:phase-auditor",  model="sonnet", ...)
+# + Agent(subagent_type="tlmforge:ux-reviewer", model="sonnet", ...) only if UI files in diff
+```
+
+The phase-auditor's launch prompt for Medium omits the `tester_edge_cases.json`
+reference (no carryover artifact). Everything else — checkpoints, 3-round cap,
+escalation — is identical to Deep.
+
+### Phase-end roster — Deep path (3 agents, +1 conditional)
 
 Launch in parallel, single assistant message with multiple Agent tool calls:
 
@@ -915,7 +1043,32 @@ destroys the audit trail.
 
 ---
 
-## Stage 5 — Final audit (2 agents, single-shot, parallel)
+## Stage 5 — Final audit
+
+### Stage 5 — Medium path (phase-auditor only)
+
+For Medium tasks, Stage 5 is a single compliance check: did the implementation
+deliver exactly what the fix plan promised?
+
+```
+Agent(subagent_type="tlmforge:phase-auditor", model="sonnet", ...)
+```
+
+No red-team (no new attack surface; code-reviewer at phase-end already reviewed
+the delta for correctness). No architect-reviewer (architectural opinion not needed
+for a fix — compliance is the only question).
+
+The phase-auditor reads:
+- `specs/<feature>/README.md` — the fix plan
+- Full feature diff: `git diff <feature-start-sha>..HEAD`
+
+Output: `agent_verification/final_audit_phase-auditor.{md,json}` with
+`verdict_sha` = full 40-char HEAD SHA (same Hook 3 requirement as Deep).
+
+If CRITICAL findings: main Claude fixes and re-runs once. Still unresolved → escalate.
+PSR rules apply identically if commits land after the audit.
+
+### Stage 5 — Deep path (2 agents, single-shot, parallel)
 
 **Goal:** A final cross-cutting check on the complete feature diff — covering
 two angles per-phase reviewers couldn't see:
@@ -1375,6 +1528,22 @@ Final:
 
 - [ ] All commits on main (or feature branch if explicitly instructed); no long-lived branches
 - [ ] No CRITICAL/HIGH findings open without an explicit deferral
+
+**Medium intensity:**
+
+- [ ] `specs/<f>/spec_audit.md` exists (abbreviated: root cause, fix scope, rollback, test plan)
+- [ ] Active-feature marker written (`specs/.tlmforge_active_feature`)
+- [ ] `specs/<f>/README.md` (fix plan: context, scope, phases, TDD plan, verification criteria)
+- [ ] `agent_verification/round-1-architect-reviewer.{md,json}` + `round-1-tester.{md,json}` present
+- [ ] `agent_verification/round-1-fixes.md` written; CRITICAL/HIGH findings addressed
+- [ ] `agent_verification/SUMMARY.md` exists
+- [ ] Per phase: `phase-N-<topic>.md`, `phase-N-verify.md` (committed before run), `phase-N-evidence.md` (committed after), `phase-N-summary.md`
+- [ ] Tests written first, RED → GREEN; all existing tests pass
+- [ ] Phase-end: `code-reviewer` + `phase-auditor` approved; `phase-N-verification/SUMMARY.md` exists
+- [ ] `agent_verification/final_audit_phase-auditor.{md,json}` with `verdict_sha`
+- [ ] `specs/<f>/STATUS.md` (abbreviated — TL;DR, phase table, test counts, honest assessment)
+- [ ] Active-feature marker deleted at Stage 7
+- [ ] All commits pushed
 
 **Light intensity:**
 
