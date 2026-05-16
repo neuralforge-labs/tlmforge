@@ -41,6 +41,12 @@ Changing/fixing → Medium. Adding new capability → Deep.
 | **Medium** | Fixes or improves existing behavior. No new product surface. | Bug fix (multi-file ok), refactor a module, add missing tests, improve error-message tracing, perf fix in existing path |
 | **Deep** | Adds new capability or surface that didn't exist. | New feature, new API endpoint, new data model, new integration, new auth flow, new UI screen |
 
+**Security-surface override:** If the work modifies how the system makes security
+decisions — auth flow logic, secret/credential handling, PII access controls,
+cryptography, session/token mechanics, or access control — classify as Deep
+regardless of whether it's "changing existing" or "adding new." A security fix
+that changes access control logic is Deep, not Medium.
+
 ### Announce and proceed (Stage 0 — no confirmation gate)
 
 After classifying, tell the user in one sentence and proceed immediately:
@@ -728,12 +734,16 @@ Commit `phase-N-verify.md` BEFORE running tests. Commit
 
 The TDD discipline (`~/.claude/rules/tdd.md`) — applied per test layer:
 
-1. **Source scenarios.** Read `agent_verification/tester_edge_cases.json`
-   (produced by Stage 3 tester at Round 1) as the **scenario seed**. For each
-   edge case, assign a test layer (unit / integration / E2E). Add new
-   scenarios only if implementation surfaces something Stage 3 missed —
-   mark these with `source: "impl"` in the JSON so the phase-end tester
-   knows they were impl-time additions.
+1. **Source scenarios.**
+   - **Deep path:** Read `agent_verification/tester_edge_cases.json`
+     (produced by Stage 3 tester at Round 1) as the **scenario seed**. For each
+     edge case, assign a test layer (unit / integration / E2E). Add new
+     scenarios only if implementation surfaces something Stage 3 missed —
+     mark these with `source: "impl"` in the JSON so the phase-end tester
+     knows they were impl-time additions.
+   - **Medium path:** No `tester_edge_cases.json` — read the tester's round-1
+     prose report at `agent_verification/round-1-tester.md` and derive test
+     scenarios from it directly. No JSON artifact required or written.
 2. **Identify applicable layers:**
    - Unit: always required for new logic
    - Integration: required when crossing module/service boundaries OR
@@ -962,6 +972,8 @@ Do not read any file not listed in evidence.
 
 Phase start SHA: <PHASE_START_SHA>
 Scope: phase diff only — cross-phase concerns are Stage 5's job.
+**Medium path:** omit the `tester:` block — tester ran at Stage 3 and is NOT
+launched at phase-end for Medium tasks. Only `code-reviewer` and `phase-auditor` fire.
 
 - code-reviewer:  TDD compliance, pattern consistency, security on impl,
                   no dead code, no surprises. Delta only.
@@ -1066,7 +1078,9 @@ Output: `agent_verification/final_audit_phase-auditor.{md,json}` with
 `verdict_sha` = full 40-char HEAD SHA (same Hook 3 requirement as Deep).
 
 If CRITICAL findings: main Claude fixes and re-runs once. Still unresolved → escalate.
-PSR rules apply identically if commits land after the audit.
+PSR rules apply identically if commits land after the audit. See
+"Post-Stage-5 re-review (PSR)" in the Deep path Stage 5 section for exact
+file naming and `verdict_sha` requirement.
 
 ### Stage 5 — Deep path (2 agents, single-shot, parallel)
 
@@ -1178,6 +1192,14 @@ re-review).
 ---
 
 ## Stage 6 — Live verification + operator tooling
+
+### Stage 6 — Medium path: skipped
+
+Medium tasks fix existing behavior — they don't introduce new deployment
+surfaces or require operator runbooks. Stage 6 is skipped. Go directly
+to Stage 7 (abbreviated STATUS.md).
+
+### Stage 6 — Deep path
 
 **Goal:** Prove the feature works on a real deployed environment, and
 hand the operator everything they need to roll it out, monitor it, and
@@ -1536,6 +1558,7 @@ Final:
 - [ ] `specs/<f>/README.md` (fix plan: context, scope, phases, TDD plan, verification criteria)
 - [ ] `agent_verification/round-1-architect-reviewer.{md,json}` + `round-1-tester.{md,json}` present
 - [ ] `agent_verification/round-1-fixes.md` written; CRITICAL/HIGH findings addressed
+- [ ] If CRITICALs remained after round 1: `round-2-{architect-reviewer,tester}.{md,json}` present; zero CRITICALs in round-2 JSONs
 - [ ] `agent_verification/SUMMARY.md` exists
 - [ ] Per phase: `phase-N-<topic>.md`, `phase-N-verify.md` (committed before run), `phase-N-evidence.md` (committed after), `phase-N-summary.md`
 - [ ] Tests written first, RED → GREEN; all existing tests pass
@@ -1558,7 +1581,7 @@ Final:
 
 - [ ] TDD: tests first, RED → GREEN
 - [ ] Build clean
-- [ ] Stop hooks (code-reviewer, tester) caught no issues
+- [ ] Self-review checklist passed (see Light path in `~/.claude/CLAUDE.md`)
 
 If a Full-intensity checkbox is unchecked, the feature is **not done**.
 

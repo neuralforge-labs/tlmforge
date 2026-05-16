@@ -8,11 +8,14 @@
 
 The convergence rule's `expected_roles` list varies BY STAGE. SKILL.md and this sub-doc must agree.
 
-| Stage | Iteration model | Default expected reviewer roles | Conditional / optional |
-|---|---|---|---|
-| Stage 3 (plan review) | bounded 3-round loop, same reviewers across rounds | `architect-reviewer`, `tester`, `threat-modeler` | `ux-reviewer` (only if plan describes UI work) |
-| Stage 4 phase-end (per-phase verification) | bounded 3-round loop per phase | `code-reviewer`, `tester`, `phase-auditor` | `ux-reviewer` (only if phase diff contains UI files) |
-| Stage 5 (final audit) | **single shot, no iteration** | `red-team-reviewer` [opus], `architect-reviewer` [sonnet] | none |
+| Stage | Path | Iteration model | Default expected reviewer roles | Conditional / optional |
+|---|---|---|---|---|
+| Stage 3 (plan review) | Deep | bounded 3-round loop, same reviewers across rounds | `architect-reviewer`, `tester`, `threat-modeler` | `ux-reviewer` (only if plan describes UI work) |
+| Stage 3 (plan review) | Medium | max 2 rounds | `architect-reviewer`, `tester` | `ux-reviewer` (only if plan describes UI work) |
+| Stage 4 phase-end | Deep | bounded 3-round loop per phase | `code-reviewer`, `tester`, `phase-auditor` | `ux-reviewer` (only if phase diff contains UI files) |
+| Stage 4 phase-end | Medium | bounded 3-round loop per phase | `code-reviewer`, `phase-auditor` | `ux-reviewer` (only if phase diff contains UI files) |
+| Stage 5 (final audit) | Deep | **single shot, no iteration** | `red-team-reviewer` [opus], `architect-reviewer` [sonnet] | none |
+| Stage 5 (final audit) | Medium | **single shot, no iteration** | `phase-auditor` [sonnet] | none |
 
 **Stage 3 — why the trio:**
 - `architect-reviewer`: would a senior L8/E8 ship this design?
