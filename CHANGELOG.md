@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.5.10 (2026-05-16)
+
+### Hook 2 made advisory
+
+Hook 2 (mutation gate) now prints a reminder to stderr instead of blocking.
+Exit code is always 0 — writes and bash commands are never prevented
+regardless of whether the skill was invoked.
+
+**Migration:** No action required. Bypass phrases and `TLMFORGE_HOOKS=0` still
+work but are no longer needed to get past Hook 2.
+
+---
+
 ## 0.5.9 (2026-05-16)
 
 ### Medium path regression tests

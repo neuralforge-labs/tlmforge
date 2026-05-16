@@ -13,10 +13,8 @@ from safe import fail_open
 MUTATION_TOOLS = {"Edit", "Write", "Bash", "MultiEdit"}
 MARKER_DIR = os.environ.get("TLMFORGE_MARKER_DIR") or os.path.expanduser("~/.cache/tlmforge")
 
-DENY_MSG = (
-    "tlmforge: feature-development skill not invoked for this task.\n"
-    "Invoke `Skill(tlmforge:feature-development)` to proceed, OR re-prompt\n"
-    "with `be quick` / `just do it` / `trivial fix` to override."
+REMIND_MSG = (
+    "Before responding, invoke `Skill(tlmforge:feature-development)`. The skill's Stage 0 exits cleanly if this isn't a work request; its classification gate is authoritative for Light vs Deep. To bypass enforcement on this message, include `be quick`, `just do it`, or `trivial fix` in your prompt. (Bare \"minimal\" / \"trivial\" are NOT accepted — they appear too often in technical prose.)"
 )
 
 
@@ -89,9 +87,9 @@ def main():
     if skill_invoked_since(entries, since=window_start):
         sys.exit(0)
 
-    # Block
-    print(DENY_MSG, file=sys.stderr)
-    sys.exit(2)
+    # Remind (advisory — does not block)
+    print(REMIND_MSG, file=sys.stderr)
+    sys.exit(0)
 
 
 if __name__ == "__main__":
