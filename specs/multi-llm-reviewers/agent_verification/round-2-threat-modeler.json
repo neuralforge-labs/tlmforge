@@ -1,0 +1,33 @@
+{
+  "reviewer": "threat-modeler",
+  "schema_version": "1.0",
+  "iteration": 2,
+  "status": "ok",
+  "verdict": "approve_with_warnings",
+  "findings": [
+    {
+      "severity": "medium",
+      "category": "security",
+      "file": "architecture",
+      "line": null,
+      "finding": "NEW-1: The all-failures-to-status=skipped policy creates a stealthy reviewer-suppression surface. When both TLMFORGE_ENABLE_OPENAI and OPENAI_API_KEY are set (reviewer expected), any condition that triggers status=skipped — including a content-moderation rejection on a crafted diff, quota exhaustion, or env-var injection in CI — silently removes the OpenAI reviewer from every review round with no in-workflow signal. The design assumes the operator actively reads ~/.cache/tlmforge/llm_reviewer.log. An operator who expects multi-model coverage has no way to distinguish 'key absent' from 'key set but suppressed by failure'. This is distinct from the accepted 'opt-in' design decision — the threat is silent suppression of a configured-and-expected reviewer.",
+      "suggested_fix": "In the SKILL.md orchestration template (Phase 3), add a post-run check: if the reviewer was in expected_roles (flag set + key set) but its output JSON has status=skipped, emit a warning to the active conversation: 'Warning: openai reviewer was expected but returned status=skipped. Check ~/.cache/tlmforge/llm_reviewer.log.' This surfaces the distinction between never-configured and configured-but-failed, making suppression visible."
+    },
+    {
+      "severity": "nit",
+      "category": "architecture",
+      "file": "architecture",
+      "line": null,
+      "finding": "NEW-2 (LOW-1 follow-on): The risk audit table LOW row still says 'Results in status=error instead of status=skipped; correct graceful behavior.' After the user requirement change, status=error from a TOCTOU auth failure is a policy violation, not correct behavior. The stale description creates a false expectation for Phase 1 implementers who read the risk table.",
+      "suggested_fix": "Update the LOW risk table row to: 'Results in status=skipped (per all-failures-skip policy); failure reason logged. Correct graceful behavior.'"
+    },
+    {
+      "severity": "nit",
+      "category": "security",
+      "file": "architecture",
+      "line": null,
+      "finding": "LOW-2 carry-forward (NOT_FIXED): The sensitive surface inventory asserts '--output path: no traversal check needed (script writes to where called from, not user-supplied arbitrary paths).' This assertion is false — --output IS a user-supplied CLI argument. The rationale provided is not a mitigation. The severity remains low (requires compromised orchestrator), but the false assertion should not stand in documentation that future implementers will read.",
+      "suggested_fix": null
+    }
+  ]
+}

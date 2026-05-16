@@ -1,0 +1,72 @@
+{
+  "reviewer": "architect-reviewer",
+  "schema_version": "1.0",
+  "iteration": 2,
+  "status": "ok",
+  "verdict": "needs_revision",
+  "findings": [
+    {
+      "id": "C1",
+      "severity": "round1_tracking",
+      "verdict": "FIXED",
+      "evidence": "README.md:143 — REVIEWER_NAME = \"openai\" constant specified in Phase 0 Step 2. README.md:211 — \"REVIEWER_NAME = 'openai' — always this string in the output JSON\" in Phase 1. README.md:299-304 — Phase 3 concrete Python pseudocode for conditional expected_roles construction. README.md:306-308 — reviewer field contract documented. README.md:242 — test asserts reviewer=\"openai\"."
+    },
+    {
+      "id": "C2",
+      "severity": "round1_tracking",
+      "verdict": "FIXED",
+      "evidence": "README.md:55-57 — constraints section mandates client.responses.create(), explains Chat Completions is maintenance mode. README.md:183-193 — Phase 1 implementation shows full client.responses.create() call with response.output_text extraction. README.md:337-338 — decision recorded."
+    },
+    {
+      "id": "C3",
+      "severity": "round1_tracking",
+      "verdict": "FIXED",
+      "evidence": "README.md:50-53 — constraints section mandates tempfile.NamedTemporaryFile(dir=output_dir, delete=False) + os.replace(), explicitly warns against shutil.move. README.md:106-111 — architecture diagram shows exact atomic write sequence. README.md:143 — Phase 0 Step 2 references atomic write. README.md:160-161 — Phase 0 tests include atomic write verification."
+    },
+    {
+      "id": "W1",
+      "severity": "round1_tracking",
+      "verdict": "PARTIALLY",
+      "evidence": "README.md:179-181 — Phase 1 pre-flight shows re.fullmatch validation but does NOT explicitly call .strip() before the regex. The regex blocks the path-corruption bug (\\n fails [a-zA-Z0-9_-]+) but a marker with a trailing newline will produce a false status=skipped instead of working correctly. README.md:241 — the test for spaces says 'Python strips and validates, exit 2 (invalid chars)', implying strip happens before validation, but the trailing-newline fixture test (claimed in fixes.md line 30) is not in the listed test cases. The .strip() call must be made explicit in the Phase 1 pre-flight pseudocode and the trailing-newline test case must be added."
+    },
+    {
+      "id": "W2",
+      "severity": "round1_tracking",
+      "verdict": "FIXED",
+      "evidence": "README.md:326-333 risk audit row explicitly documents the HIGH risk of plan size and notes silent skip on quota error as the mitigation. fixes.md:36 records the accepted deferral. Explicitly called out, not silently ignored."
+    },
+    {
+      "id": "W3",
+      "severity": "round1_tracking",
+      "verdict": "FIXED",
+      "evidence": "README.md:8 — context confirms gpt-5.5 resolves to gpt-5.5-2026-04-23 (documented). README.md:291-296 — Phase 3 SKILL.md config table documents TLMFORGE_OPENAI_MODEL override. README.md:330 — risk audit notes model-not-found → error JSON. Pinning mechanism documented and risk acknowledged."
+    },
+    {
+      "id": "NEW-C1",
+      "severity": "critical",
+      "category": "test_coverage",
+      "file": "specs/multi-llm-reviewers/README.md",
+      "line_range": "236-238",
+      "finding": "Phase 1 test expectations for auth failure, double-retry-invalid-JSON, and truncation after retry all assert status=error + meta CRITICAL + exit 0. This directly contradicts the architecture constraint at lines 59-66 (ALL LLM provider failures → status=skipped + exit 2) and the Phase 1 implementation spec at lines 200-208. The test spec was not updated to reflect the silent-skip user requirement. A developer implementing to pass these tests will produce status=error behavior, breaking the silent-skip contract.",
+      "suggested_fix": "In Phase 1 test additions, change the three failing test expectations: (1) 'Both calls invalid JSON → status=skipped, exit 2, reason logged'; (2) 'Auth error (mocked) → status=skipped, exit 2, reason logged'; (3) 'Truncated response → retry → still truncated → status=skipped, exit 2, reason logged'. These are LLM provider failures, not implementation bugs."
+    },
+    {
+      "id": "NEW-C2",
+      "severity": "critical",
+      "category": "architecture",
+      "file": "specs/multi-llm-reviewers/README.md",
+      "line": 374,
+      "finding": "Verification Criterion 1 asserts that OPENAI_API_KEY=fake produces status=error + meta CRITICAL + exit 0. A fake key will trigger an OpenAI auth error, which is an LLM provider failure. Per the silent-skip requirement (README.md:59-66) this must produce status=skipped + exit 2, not status=error + exit 0. This criterion will cause verification to fail against a correctly implemented script, or cause a developer to implement the wrong behavior to satisfy it.",
+      "suggested_fix": "Change Criterion 1 to: '...exits 2, JSON has status=skipped, reviewer=\"openai\", reason logged to ~/.cache/tlmforge/llm_reviewer.log'. Add a separate Criterion 1b using a mocked successful API call to verify the status=ok + exit 0 path."
+    },
+    {
+      "id": "NEW-W1",
+      "severity": "high",
+      "category": "bug",
+      "file": "specs/multi-llm-reviewers/README.md",
+      "line": 97,
+      "finding": "The exit-code contract comment in the architecture block (line 97) still reads 'exit 0 → JSON sidecar written (status=ok or status=error with synthetic CRITICAL)'. After the silent-skip requirement, status=error + synthetic CRITICAL should never appear in normal operation. The comment is accurate for disk-full edge cases but will mislead implementers about the expected behavior under LLM provider failures. The contrast with the status=skipped path is no longer well-defined in this comment.",
+      "suggested_fix": "Update the comment to: 'exit 0 → status=ok (successful review) or status=error (implementation-level bug only, e.g. disk full — NOT for LLM provider failures). LLM provider failures always use exit 2 + status=skipped.'"
+    }
+  ]
+}

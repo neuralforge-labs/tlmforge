@@ -1,0 +1,73 @@
+{
+  "reviewer": "architect-reviewer",
+  "schema_version": "1.0",
+  "iteration": 1,
+  "status": "ok",
+  "verdict": "needs_revision",
+  "findings": [
+    {
+      "severity": "critical",
+      "category": "architecture",
+      "file": "specs/multi-llm-reviewers/README.md",
+      "line": null,
+      "finding": "expected_roles coupling unresolved: Phase 3 never specifies how the orchestrating agent builds the conditional expected_roles list, and the plan never specifies what string the openai reviewer JSON must use for the 'reviewer' field. Without both, convergence either silently ignores the new reviewer's findings or fires a spurious reviewer_json_missing meta CRITICAL when the key is absent.",
+      "suggested_fix": "Add to Phase 3 a concrete SKILL.md template showing the conditional roster: expected_roles includes 'openai' only when TLMFORGE_ENABLE_OPENAI=1 AND OPENAI_API_KEY is set; the openai script's output JSON must set reviewer='openai' (not 'gpt-5.5' or any model alias). Enforce this in a Phase 1 unit test that asserts the reviewer field equals 'openai'."
+    },
+    {
+      "severity": "critical",
+      "category": "architecture",
+      "file": "specs/multi-llm-reviewers/README.md",
+      "line": 148,
+      "finding": "Plan specifies client.chat.completions.create() for gpt-5.5, but Chat Completions is in maintenance mode for reasoning models (tool calling unsupported with reasoning:none since GPT-5.4). The Responses API is the recommended path for all new integrations, provides 40-80% better cache utilization, and is what the existing TLM server already uses. Using Chat Completions creates immediate migration debt and misses caching savings.",
+      "suggested_fix": "Phase 1 implementation must use client.responses.create(model=model, input=[{\"role\":\"user\",\"content\":content}]) and extract output via response.output_text. Update Phase 1 test mocks to patch client.responses.create, not client.chat.completions.create."
+    },
+    {
+      "severity": "critical",
+      "category": "race_condition",
+      "file": "specs/multi-llm-reviewers/README.md",
+      "line": null,
+      "finding": "Concurrent parallel script invocations in Stage 3/4/5 orchestration create a race on the output file. The shell atomic_write (tmp+mv) is correct but the Python script has no specified atomic-write requirement. If the Python process receives a signal after opening the tmp file but before the rename, the output path is left absent or stale, causing convergence to inject a false reviewer_json_missing meta CRITICAL. With parallel orchestration this is a realistic failure mode.",
+      "suggested_fix": "Phase 1 implementation spec must require: write JSON to a tempfile in the same directory as --output (same filesystem guarantees atomic rename), then os.replace(tmppath, output_path). Use tempfile.NamedTemporaryFile(dir=output_dir, delete=False). Do NOT use shutil.move (not atomic across filesystems). Add a unit test that kills the process mid-write and asserts the output path is either absent or contains the previous round's complete JSON."
+    },
+    {
+      "severity": "high",
+      "category": "bug",
+      "file": "specs/multi-llm-reviewers/README.md",
+      "line": 146,
+      "finding": "Python file read of specs/.tlmforge_active_feature via open().read() does not strip the trailing newline, producing a path like 'specs/multi-llm-reviewers\\n/README.md' that will not resolve. Shell command substitution strips trailing newlines automatically; Python does not.",
+      "suggested_fix": "In Phase 1, read the marker file with open(marker_path).read().strip(). Add a unit test with a fixture file containing a trailing newline and assert the constructed README path resolves correctly."
+    },
+    {
+      "severity": "high",
+      "category": "architecture",
+      "file": "specs/multi-llm-reviewers/README.md",
+      "line": null,
+      "finding": "mode=plan sends the full README.md with no token budget guard. gpt-5.5 pricing is confirmed at $5/1M input + $30/1M output. A 100K-token README (plausible for a large feature) would cost $0.50 per single plan-review call with no warning to the user. The plan's cost analysis only covers code-review (mode=code) and does not model mode=plan input volume.",
+      "suggested_fix": "Add a configurable TLMFORGE_MAX_PLAN_TOKENS env var (default 40000). In mode=plan, count tokens roughly as len(text)//4; if over limit, write status=error with a meta CRITICAL ('plan_too_large — truncation would corrupt review context') and exit 0. Update cost analysis to use confirmed pricing."
+    },
+    {
+      "severity": "medium",
+      "category": "architecture",
+      "file": "specs/multi-llm-reviewers/README.md",
+      "line": null,
+      "finding": "gpt-5.5 resolves to an unversioned alias (currently gpt-5.5-2026-04-23). If OpenAI updates the alias between Round 1 and Round 2 of the same feature's review, the model under test silently changes, potentially causing a finding to appear or disappear across iterations for reasons unrelated to code changes. The SKILL.md section does not document this risk or recommend pinning.",
+      "suggested_fix": "Phase 3 SKILL.md docs should note: 'For reproducible reviews across iterations, pin to a dated model alias via TLMFORGE_OPENAI_MODEL=gpt-5.5-2026-04-23 rather than relying on the rolling alias.'"
+    },
+    {
+      "severity": "medium",
+      "category": "test_coverage",
+      "file": "specs/multi-llm-reviewers/README.md",
+      "line": null,
+      "finding": "Phase 0 test specification does not explicitly prohibit passing 'openai' in expected_roles to check_convergence.py. If a Phase 0 test accidentally exercises the convergence path with the stub's status=skipped JSON, it will surface a warning that could be mistaken for a real convergence issue. The TDD plan is silent on this boundary.",
+      "suggested_fix": "Add to Phase 0 test spec: 'Tests in this phase exercise only the shell wrapper exit-code contract and JSON schema validity. No test in Phase 0 shall pass the openai role to evaluate_convergence as an expected role.'"
+    },
+    {
+      "severity": "low",
+      "category": "security",
+      "file": "specs/multi-llm-reviewers/README.md",
+      "line": null,
+      "finding": "git diff HEAD output is injected directly as the LLM user message without a delimiter. A diff containing lines like '+# Output ONLY a JSON object...' constitutes a prompt injection vector. This is low severity given the model capability, but the Gemini script has the same gap and establishing a fenced-block pattern in the new Python script would be a correctness improvement.",
+      "suggested_fix": "Wrap the diff content in a triple-backtick fence in the user message: 'Review this diff:\\n```\\n{diff_content}\\n```\\nOutput only valid JSON.'"
+    }
+  ]
+}

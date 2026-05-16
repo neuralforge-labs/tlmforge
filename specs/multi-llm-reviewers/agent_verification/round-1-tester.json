@@ -1,0 +1,89 @@
+{
+  "reviewer": "tester",
+  "schema_version": "1.0",
+  "iteration": 1,
+  "status": "ok",
+  "verdict": "needs_revision",
+  "findings": [
+    {
+      "severity": "critical",
+      "category": "bug",
+      "file": "skills/feature-development/ai_review_json_openai.py",
+      "line": null,
+      "finding": "EC-1: Error handler omits suggested_fix on synthetic CRITICAL finding — schema-invalid output permanently blocks convergence with no actionable fix surfaced",
+      "suggested_fix": "Mirror Gemini write_error() exactly: every synthetic CRITICAL finding must include suggested_fix as a non-empty string. Add post-build json.dumps() serialization, never string interpolation."
+    },
+    {
+      "severity": "critical",
+      "category": "logic_error",
+      "file": "skills/feature-development/ai_review_json_openai.py",
+      "line": null,
+      "finding": "EC-2: mode=code with empty git diff silently produces status=ok approve — false convergence at Stage 3 where no code yet exists",
+      "suggested_fix": "After git diff HEAD, check if output is empty (.strip()). If empty in mode=code, write status=skipped and exit 2. Do not call OpenAI with an empty diff."
+    },
+    {
+      "severity": "critical",
+      "category": "data_loss",
+      "file": "skills/feature-development/ai_review_json_openai.py",
+      "line": null,
+      "finding": "EC-3: OpenAI response with finish_reason=length but parseable JSON accepted as complete review — blocking findings silently dropped",
+      "suggested_fix": "Check response.choices[0].finish_reason (Chat Completions) or equivalent Responses API field before accepting. If truncated, treat as invalid and retry. After 2 truncations, write status=error with openai_response_truncated CRITICAL."
+    },
+    {
+      "severity": "critical",
+      "category": "logic_error",
+      "file": "skills/feature-development/ai_review_json_openai.py",
+      "line": null,
+      "finding": "EC-4: OpenAI returning uppercase severity ('CRITICAL' not 'critical') passes shape validation but is missed by case-sensitive convergence comparison — silent false convergence",
+      "suggested_fix": "After parsing OpenAI response, validate enum fields (severity, category) against review_schema.json allowed values before writing. On mismatch, trigger retry. After 2 failures write status=error with openai_schema_validation_failed CRITICAL."
+    },
+    {
+      "severity": "critical",
+      "category": "bug",
+      "file": "skills/feature-development/ai_review_json.sh",
+      "line": null,
+      "finding": "EC-5: mode=plan with absent active-feature marker produces double-slash path 'specs//README.md' which resolves to 'specs/README.md' on Linux — wrong document reviewed silently",
+      "suggested_fix": "Explicitly check marker file existence and non-emptiness before path construction. If absent or empty, write_skipped and exit 2. Same fix required in the Python script."
+    },
+    {
+      "severity": "critical",
+      "category": "missing_error_handling",
+      "file": "skills/feature-development/ai_review_openai.sh",
+      "line": null,
+      "finding": "EC-6: Output parent directory missing causes exit 1 (undefined exit code) with no JSON sidecar — convergence injects misleading reviewer_json_missing CRITICAL",
+      "suggested_fix": "Both shell wrapper and Python script must check dirname(OUTPUT) exists before any write. If not, exit 64 with stderr: 'ERROR: output directory does not exist: <path>'."
+    },
+    {
+      "severity": "critical",
+      "category": "bug",
+      "file": "skills/feature-development/ai_review_json_openai.py",
+      "line": null,
+      "finding": "EC-7: reviewer field in written JSON not pinned to 'openai' — if set to model name (e.g. 'gpt-5.5') key mismatch with expected_roles causes permanent reviewer_json_missing CRITICAL",
+      "suggested_fix": "Hardcode REVIEWER_NAME = 'openai' constant. Never derive from TLMFORGE_OPENAI_MODEL. Document this contract in SKILL.md expected_roles table."
+    },
+    {
+      "severity": "high",
+      "category": "missing_error_handling",
+      "file": "skills/feature-development/ai_review_json_openai.py",
+      "line": null,
+      "finding": "EC-8: Non-integer --iteration value not validated — produces invalid JSON in string interpolation or uncaught ValueError with exit 1 (undefined exit code)",
+      "suggested_fix": "Shell: validate ITERATION matches ^[0-9]+$ after arg parse, exit 64 if not. Python: wrap int(args.iteration) in try/except ValueError, exit 64 with descriptive message."
+    },
+    {
+      "severity": "high",
+      "category": "bug",
+      "file": "skills/feature-development/ai_review_json.sh",
+      "line": null,
+      "finding": "EC-9: active-feature marker containing spaces causes bash word-splitting on unquoted subshell expansion — path truncated at space, correct README silently skipped",
+      "suggested_fix": "Quote all subshell expansions: feature_name=\"$(cat \"$marker\")\" then use \"specs/${feature_name}/README.md\". Both Gemini extension and Python script must handle this."
+    },
+    {
+      "severity": "high",
+      "category": "test_coverage",
+      "file": "skills/feature-development/tests/test_openai_wrapper.py",
+      "line": null,
+      "finding": "EC-10: No test planned for schema enum mismatch from OpenAI — silent false-convergence failure mode (EC-4) has no regression guard in the proposed test plan",
+      "suggested_fix": "Add to Phase 1 test plan: mocked OpenAI returns uppercase severity CRITICAL -> both retries fail validation -> status=error written. This is the highest-value missing test."
+    }
+  ]
+}

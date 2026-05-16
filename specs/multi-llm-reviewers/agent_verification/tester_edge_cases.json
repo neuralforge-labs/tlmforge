@@ -1,0 +1,111 @@
+{
+  "feature": "multi-llm-reviewers",
+  "generated_at_stage": "3-round-1",
+  "scenarios": [
+    {
+      "id": "EC-1",
+      "description": "Expired/revoked OPENAI_API_KEY — error handler omits suggested_fix on synthetic CRITICAL finding, producing schema-invalid output that permanently blocks convergence",
+      "severity": "critical",
+      "layer": "unit",
+      "source": "stage3"
+    },
+    {
+      "id": "EC-2",
+      "description": "mode=code with empty git diff (Stage 3 before any code) silently produces status=ok approve, causing false convergence",
+      "severity": "critical",
+      "layer": "unit",
+      "source": "stage3"
+    },
+    {
+      "id": "EC-3",
+      "description": "OpenAI response truncated (finish_reason equivalent) but syntactically valid JSON — accepted as complete review, blocking findings silently dropped",
+      "severity": "critical",
+      "layer": "unit",
+      "source": "stage3"
+    },
+    {
+      "id": "EC-4",
+      "description": "OpenAI returns valid JSON with uppercase severity CRITICAL — case-sensitive convergence comparison misses it, false convergence reached",
+      "severity": "critical",
+      "layer": "unit",
+      "source": "stage3"
+    },
+    {
+      "id": "EC-5",
+      "description": "mode=plan with absent active-feature marker — double-slash path reads wrong specs/README.md instead of exiting 2",
+      "severity": "critical",
+      "layer": "integration",
+      "source": "stage3"
+    },
+    {
+      "id": "EC-6",
+      "description": "Output parent directory does not exist — undefined exit code, no sidecar written, misleading reviewer_json_missing CRITICAL injected by convergence",
+      "severity": "critical",
+      "layer": "unit",
+      "source": "stage3"
+    },
+    {
+      "id": "EC-7",
+      "description": "reviewer field in written JSON is model name not role name — key mismatch with expected_roles causes permanent reviewer_json_missing CRITICAL",
+      "severity": "critical",
+      "layer": "unit",
+      "source": "stage3"
+    },
+    {
+      "id": "EC-8",
+      "description": "Non-integer --iteration value produces invalid JSON or Python traceback with undefined exit code",
+      "severity": "high",
+      "layer": "unit",
+      "source": "stage3"
+    },
+    {
+      "id": "EC-9",
+      "description": "active-feature marker contains spaces — bash word-splitting truncates path, correct README silently skipped",
+      "severity": "high",
+      "layer": "integration",
+      "source": "stage3"
+    },
+    {
+      "id": "EC-10",
+      "description": "No test planned for schema enum mismatch — silent false-convergence failure mode has no regression guard",
+      "severity": "high",
+      "layer": "unit",
+      "source": "stage3"
+    },
+    {
+      "id": "TM-C1",
+      "description": "Bash(OPENAI_API_KEY=:*) permission entry auto-approves any command prefixed with OPENAI_API_KEY= — prompt injection can execute arbitrary commands",
+      "severity": "critical",
+      "layer": "unit",
+      "source": "stage3"
+    },
+    {
+      "id": "TM-C2",
+      "description": "Unvalidated .tlmforge_active_feature content allows path traversal — '../../../.ssh/id_rsa' exfiltrated to api.openai.com via mode=plan",
+      "severity": "critical",
+      "layer": "unit",
+      "source": "stage3"
+    },
+    {
+      "id": "TM-H2",
+      "description": "API error message string-interpolated into JSON — error text containing double-quote breaks JSON boundary, blocking convergence",
+      "severity": "high",
+      "layer": "unit",
+      "source": "stage3"
+    },
+    {
+      "id": "ARCH-C2",
+      "description": "client.chat.completions.create() deprecated for gpt-5.5 — must use Responses API. Wrong API causes tool-calling failures.",
+      "severity": "critical",
+      "layer": "unit",
+      "source": "stage3"
+    },
+    {
+      "id": "ARCH-C3",
+      "description": "Python script has no atomic-write requirement — interrupted write leaves absent or partial output file, triggering false reviewer_json_missing CRITICAL",
+      "severity": "critical",
+      "layer": "unit",
+      "source": "stage3"
+    }
+  ]
+}
