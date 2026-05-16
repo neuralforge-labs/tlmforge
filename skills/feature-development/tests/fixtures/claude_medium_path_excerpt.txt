@@ -1,0 +1,6 @@
+### Medium path
+
+Invoke `Skill(tlmforge:feature-development)` — abbreviated recipe:
+abbreviated spec audit → fix plan → single-round review (architect-reviewer +
+tester) → phase-gated TDD with phase-end (code-reviewer + phase-auditor) →
+phase-auditor final compliance check → abbreviated STATUS.md.

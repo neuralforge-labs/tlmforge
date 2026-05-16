@@ -1,0 +1,64 @@
+{
+  "reviewer": "architect-reviewer",
+  "schema_version": "1.0",
+  "iteration": 1,
+  "verdict": "needs_revision",
+  "findings": [
+    {
+      "severity": "critical",
+      "category": "logic_error",
+      "file": "specs/v058-validation/README.md",
+      "line": null,
+      "finding": "Pre-fix bug pin test (TestConvergenceMediumPath test 6) is logically inverted: evaluate_convergence() injects reviewer_json_missing for ANY missing expected role — this is unconditional behavior of the function, not a v0.5.8-specific property. The test passes GREEN before and after v0.5.8 and catches zero regressions. An accidental revert of the Medium rows in reviewer-convergence.md would NOT be caught by this test.",
+      "suggested_fix": "Either remove the pre-fix functional test and rely solely on content integrity tests (which correctly guard the reviewer-convergence.md table), or replace it with a test that reads the Medium row from reviewer-convergence.md, parses the expected_roles from it, and asserts threat-modeler is absent — making the test an end-to-end regression guard for the actual bug rather than a tautological function-behavior check."
+    },
+    {
+      "severity": "high",
+      "category": "architecture",
+      "file": "specs/v058-validation/README.md",
+      "line": null,
+      "finding": "TestSkillContentIntegrity reads ~/.claude/CLAUDE.md from disk and skips gracefully when the file is absent. This means test 15 ('CLAUDE.md has abbreviated recipe') is silently skipped on any machine other than the author's, including CI and reviewer workstations. A skip is not a pass — regressions in CLAUDE.md are invisible to anyone without the file at that path.",
+      "suggested_fix": "Copy the relevant CLAUDE.md fragment (the Medium path description paragraph) into a committed fixture file under tests/fixtures/ and assert against that. The fixture is version-controlled, always present, and makes the test unconditionally reproducible. For SKILL.md and reviewer-convergence.md (in-repo files), on-disk reads are fine."
+    },
+    {
+      "severity": "high",
+      "category": "tdd_violation",
+      "file": "specs/v058-validation/README.md",
+      "line": null,
+      "finding": "The TDD plan section says 'verify all 15 tests are GREEN (files already patched)' — this means content integrity tests go GREEN immediately on write, with no RED phase. The tdd.md rule is explicit: 'A test that passes before impl is worthless.' The Phase steps mention inline v0.5.7 fixtures for RED confirmation but the TDD plan section contradicts this, making the likely implementation path (write → observe GREEN → declare done) a TDD violation.",
+      "suggested_fix": "Commit to the fixture-based RED approach explicitly in the TDD plan section: content integrity tests are written against inline v0.5.7 fixture strings (not live file reads) in the RED phase; confirm RED; then switch parameterization to live file reads and confirm GREEN. Capture RED output as evidence."
+    },
+    {
+      "severity": "medium",
+      "category": "architecture",
+      "file": "specs/v058-validation/README.md",
+      "line": null,
+      "finding": "Verification criterion '151+ passed' for the combined suite is an unanchored number. The plan does not establish the current hooks/tests/ baseline count, making the criterion unverifiable at plan time. If hooks/tests/ currently has failures unrelated to this change, the verification criterion silently blocks.",
+      "suggested_fix": "Run the full suite before implementation and record the concrete baseline count. Replace '151+' with 'baseline_N + 21 = N+21 expected.' This is a one-command check."
+    },
+    {
+      "severity": "medium",
+      "category": "test_coverage",
+      "file": "specs/v058-validation/README.md",
+      "line": null,
+      "finding": "Convergence test 4 ('Medium Stage 4 with all 3 Deep agents → still converges') exercises a trivial code path: evaluate_convergence() iterates expected_roles, so extra keys in reviewer_jsons are silently ignored by construction. This is already implicitly covered and adds no new signal.",
+      "suggested_fix": "Replace with a scenario that covers the Medium Phase 4 blocking path: phase-auditor returns needs_revision with a real CRITICAL. This gives symmetric coverage (converges + blocks) and tests the path that matters for the actual skill workflow."
+    },
+    {
+      "severity": "low",
+      "category": "architecture",
+      "file": "specs/v058-validation/README.md",
+      "line": null,
+      "finding": "Convergence test 5 (Stage 5 Medium with phase-auditor only) is under-specified in the plan: no assertion list is given. A test that calls evaluate_convergence() without asserting converged=True, real_critical_count=0, meta_critical_count=0 is not a test.",
+      "suggested_fix": "Add explicit assertion list to the plan description for test 5: assert converged=True, real_critical_count=0, meta_critical_count=0, warnings=[]."
+    },
+    {
+      "severity": "low",
+      "category": "architecture",
+      "file": "specs/v058-validation/README.md",
+      "line": null,
+      "finding": "Plan is silent on test isolation strategy for TestSkillContentIntegrity: whether files are read once at class setup or per-test. For a read-only test class the risk is low, but the absence of explicit policy is a gap in the spec.",
+      "suggested_fix": "State explicitly in the plan whether file reads are per-test or module-level cached, and why. Either is acceptable; the silence is the issue."
+    }
+  ]
+}
