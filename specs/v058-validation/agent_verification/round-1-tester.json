@@ -1,0 +1,49 @@
+{
+  "reviewer": "tester",
+  "schema_version": "1.0",
+  "iteration": 1,
+  "verdict": "needs_revision",
+  "status": "ok",
+  "findings": [
+    {
+      "severity": "critical",
+      "category": "logic_error",
+      "file": "specs/v058-validation/README.md",
+      "line": null,
+      "finding": "Pre-fix bug pin test (TestConvergenceMediumPath test 6) is tautological: evaluate_convergence() injects reviewer_json_missing for ANY missing expected role unconditionally. A revert of Medium rows in reviewer-convergence.md would NOT be caught.",
+      "suggested_fix": "Replace with row-scoped content assertion parsing Medium Stage 3 row and asserting threat-modeler absent from that row's roles cell."
+    },
+    {
+      "severity": "high",
+      "category": "test_coverage",
+      "file": "specs/v058-validation/README.md",
+      "line": null,
+      "finding": "Test 4 (superset-of-Deep) is vacuous: evaluate_convergence iterates expected_roles, not reviewer_jsons.keys(). Extra keys in jsons are always silently ignored.",
+      "suggested_fix": "Replace with actual regression guard: expected_roles=[code-reviewer, phase-auditor], jsons only those two → converged=True, meta_critical_count=0."
+    },
+    {
+      "severity": "medium",
+      "category": "test_coverage",
+      "file": "specs/v058-validation/README.md",
+      "line": null,
+      "finding": "No test pin for extra-reviewer-in-jsons-is-ignored behavior. Refactor of evaluate_convergence to iterate jsons.keys() would cause spurious CRITICALs undetected.",
+      "suggested_fix": "Add test_extra_reviewer_in_jsons_is_ignored asserting tester not in findings_by_role when expected_roles=[code-reviewer, phase-auditor]."
+    },
+    {
+      "severity": "medium",
+      "category": "test_coverage",
+      "file": "specs/v058-validation/README.md",
+      "line": null,
+      "finding": "Global substring searches for absence assertions (e.g. threat-modeler not in content) would pass even if threat-modeler only appears in Deep rows.",
+      "suggested_fix": "Use row-scoped regex _medium_row() to extract roles cell of the specific Medium row before asserting absence."
+    },
+    {
+      "severity": "low",
+      "category": "test_coverage",
+      "file": "specs/v058-validation/README.md",
+      "line": null,
+      "finding": "Empty expected_roles edge case not tested.",
+      "suggested_fix": "Add test_empty_expected_roles_converges."
+    }
+  ]
+}
