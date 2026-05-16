@@ -1,5 +1,128 @@
 # Changelog
 
+## 0.5.9 (2026-05-16)
+
+### Medium path regression tests
+
+Added 23 automated regression tests guarding all v0.5.8 Medium path fixes.
+Total test count: 183 (130 hooks + 30 pre-existing skill + 23 new). Zero regressions.
+
+**Test classes:**
+- `TestTDDRedPhase` (4) — inline v0.5.7 fixture strings prove tests would be RED before the fix
+- `TestSkillContentIntegrity` (12) — reviewer-convergence.md Medium-path table rows; SKILL.md
+  phase-end annotations; committed CLAUDE.md fixture
+- `TestConvergenceMediumPath` (7) — `evaluate_convergence()` with Medium `expected_roles`;
+  confirms no spurious synthetic CRITICALs for excluded roles
+
+**Files added:**
+- `skills/feature-development/tests/test_v058_medium_path.py`
+- `skills/feature-development/tests/fixtures/claude_medium_path_excerpt.txt`
+
+### Migration
+
+None — additive test coverage only. No behavior change.
+
+---
+
+## 0.5.8 (2026-05-16)
+
+### Medium path fixes (post-commit review of v0.5.7)
+
+Three CRITICALs and three warnings found by post-commit architect-reviewer and
+code-reviewer review of v0.5.7 were resolved before the regression tests landed.
+
+**Fixes applied:**
+- `reviewer-convergence.md`: Medium vs Deep path reviewer rosters clarified in the
+  per-stage table; tester's role at phase-end explicitly limited to Deep path
+- `SKILL.md`: Security-surface override added to classification rules — auth flow, secret
+  handling, PII access controls, cryptography, or session/token mechanics always Deep
+  regardless of change size; Stage 4 scenario sourcing (no `tester_edge_cases.json` on
+  Medium path); Stage 6 explicitly skipped for Medium path features
+- `CLAUDE.md`: Medium path recipe summary updated to match SKILL.md; security-surface
+  override mirrored in the classification table
+
+### Migration
+
+No breaking changes. All fixes are clarifications and guards — no existing behavior removed.
+
+---
+
+## 0.5.7 (2026-05-16)
+
+### Three-way classification gate (Light / Medium / Deep)
+
+The prior skill had a two-state system (Deep or "minimal / skip it"). v0.5.7
+introduces a formal Medium path for bug fixes, refactors, and improvements to
+existing behavior that don't add new product surfaces.
+
+**Medium path recipe:**
+```
+Stage 0: Classify → announce → proceed
+Stage 1: Abbreviated spec audit (root cause, fix scope, rollback, test plan)
+Stage 2: Fix plan (simplified README.md)
+Stage 3: Single-round review — architect-reviewer + tester (no threat-modeler)
+Stage 4: TDD execution with phase-end code-reviewer + phase-auditor
+Stage 5: phase-auditor final compliance check (no red-team)
+Stage 7: Abbreviated STATUS.md
+```
+
+**Classification rule:** "Am I changing what already exists, or adding something new?"
+Changing/fixing → Medium. Adding new capability → Deep.
+
+**Auto-classify and proceed.** No `AskUserQuestion` confirmation gate. Announce
+the chosen path in one sentence and start. The user can say "go deeper" or "go lighter"
+at any point to adjust.
+
+**SKILL.md additions:**
+- Stage 0 rewritten: dual-job step (early-exit for non-work prompts + classification gate)
+- Stage 1: abbreviated spec audit template for Medium path (6-section format)
+- Stage 2: simplified fix-plan README template for Medium path
+- Stage 3: single-round 2-agent variant documented (no convergence loop)
+- Stage 4: Medium path sourcing from tester prose instead of `tester_edge_cases.json`
+- Stage 5: phase-auditor-only compliance check for Medium path; Stage 6 skipped
+- Quick checklist: separate Medium intensity section added
+
+**CLAUDE.md additions:**
+- Classification gate section rewritten for 3-way system
+- Medium path recipe summary added to "at a glance" section
+
+### Migration
+
+No breaking changes. Existing Deep-path features are unaffected. The classification
+gate fires on new work only.
+
+---
+
+## 0.5.6 (2026-05-16)
+
+### Fix: infinite retry loop caused by same-turn transcript gap
+
+**Issue:** The enforcement hook checked the transcript for skill invocation within
+the current "task window." When the skill was invoked and then tools were called in
+the SAME assistant turn, the skill invocation appeared AFTER the tool calls in the
+transcript — because the transcript is written at turn boundaries, not in real time.
+The hook then found no invocation prior to the tool calls and re-injected the
+reminder, causing an infinite loop where every tool call triggered another reminder.
+
+**Fix:** Replaced the same-turn transcript scan with a marker-file approach.
+
+**Hook 2 (PostToolUse — new):** When the `tlmforge:feature-development` skill tool
+is invoked, a marker file is written to `.tmp/tlmforge_skill_invoked_<session-id>`.
+The mutation gate (PreToolUse) now reads this marker file instead of scanning the
+live transcript — the marker is always present by the time any subsequent tool fires
+in the same turn.
+
+**Hook 2 (PreToolUse — updated):** Mutation gate reads the marker file; if present
+and fresh (same session), allows the mutation. Marker is cleared at session start.
+
+### Migration
+
+No breaking changes. The marker file lives in `.tmp/` and is gitignored. Sessions
+without a marker (e.g., first tool call after install) behave identically to before —
+the gate fires and requires skill invocation or an override phrase.
+
+---
+
 ## 0.5.5 (2026-05-15)
 
 ### Enforcement hooks — three-hook automatic gate system
