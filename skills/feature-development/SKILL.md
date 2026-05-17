@@ -152,6 +152,35 @@ All other stages produce something before advancing.
 
 ---
 
+## Stage 0.5 — Understanding confirmation
+
+*Skip only if `TLMFORGE_APPROVAL_GATES=0` is set. Otherwise mandatory for all
+work requests (Light, Medium, Deep).*
+
+Before writing any spec, plan, or code:
+
+1. **State your understanding** in 2–3 sentences: what the user wants to build,
+   the key behavior change, and the expected outcome.
+
+2. **List open questions.** Tag each:
+   - `[BLOCKING]` — a design fork that would meaningfully change the approach;
+     user must answer before you proceed.
+   - `[INFORMATIONAL]` — you'll resolve it yourself; state your assumption inline.
+
+3. **Use `AskUserQuestion`** if you have any `[BLOCKING]` questions OR if your
+   stated understanding is non-trivial and could easily be wrong. This creates a
+   hard pause requiring user input before the spec or code is written.
+
+4. **Wait for the user's reply.** After they confirm, echo one sentence:
+   "Confirmed — I'll build X." Then proceed (to Stage 1 for Medium/Deep, or
+   directly to TDD for Light).
+
+**If the request is completely unambiguous and you have zero `[BLOCKING]`
+questions:** State your understanding in the same turn (no `AskUserQuestion`
+needed), then proceed immediately.
+
+---
+
 ## Stage 1 — Feature request analysis (produces `spec_audit.md`)
 
 **Goal:** Analyze the user's **feature request** — vague or precise,
@@ -459,14 +488,22 @@ Agent(subagent_type="tlmforge:tester",             model="sonnet", ...)
 No threat-modeler (no new attack surface). No red-team (code-reviewer at
 phase-end handles impl correctness). No ux-reviewer unless UI files are in scope.
 
-**After round 1:** fix plan, proceed to Stage 4. Write `agent_verification/round-1-fixes.md`
-as usual. If CRITICALs remain after fixes, run one more round (hard cap: 2 rounds
-for Medium). Unresolved after round 2 → escalate to user.
+**After round 1:** fix plan, write `agent_verification/round-1-fixes.md` as usual.
+If CRITICALs remain after fixes, run one more round (hard cap: 2 rounds for
+Medium). Unresolved after round 2 → escalate to user.
 
 **No `tester_edge_cases.json` carryover.** Read the tester's round-1 prose
 directly and build tests from it. No JSON artifact required for Medium.
 
 Write `agent_verification/SUMMARY.md` after the round(s) complete (same format as Deep).
+
+**Final plan approval (Stage 3 → Stage 4):**
+
+*Skip only if `TLMFORGE_APPROVAL_GATES=0` is set. Otherwise mandatory.*
+
+Same as Deep path: call `ExitPlanMode` with `specs/<feature>/README.md`. Include
+the three sections (what will be built, reviewer-findings table with resolutions,
+explicit approval question). Stage 4 begins only after the user approves.
 
 ### Round 1 — cold review (parallel)
 
@@ -641,6 +678,30 @@ tester_edge_cases.json — <N> scenarios for main Claude to seed Stage 4 TDD.
 
 **Do not proceed to Stage 4** until SUMMARY.md exists, every reviewer's final
 verdict is `approve`, AND zero CRITICAL findings remain in the final round JSONs.
+
+**Final plan approval (Stage 3 → Stage 4):**
+
+*Skip only if `TLMFORGE_APPROVAL_GATES=0` is set. Otherwise mandatory.*
+
+After writing SUMMARY.md, call `ExitPlanMode` with `specs/<feature>/README.md`
+as the plan file. Your message to the user must include three sections:
+
+**Section 1 — What will be built:**
+One paragraph: the feature, the phases, the key design decisions made.
+
+**Section 2 — What reviewers flagged and how it was resolved:**
+
+| Reviewer | Finding (severity) | Resolution |
+|---|---|---|
+| architect-reviewer | Missing rollback in Phase 2 (HIGH) | Added rollback step to Phase 2 |
+| tester | Race condition on cache path (CRITICAL) | Redesigned to atomic swap |
+
+List any deferred items with the phase they're deferred to.
+
+**Section 3 — Approval question:**
+"Do you approve this plan, or do you want changes before I begin implementation?"
+
+Stage 4 begins only after the user clicks Approve.
 
 ---
 
@@ -1522,6 +1583,8 @@ Stage gates:
 - [ ] `MASTER_PLAN_COMPLETE` sentinel was sent; user replied with approval
 - [ ] `agent_verification/{architect,code,tester,...}_review.md` all present
 - [ ] `agent_verification/SUMMARY.md` lists categories, fixes, deferred items
+- [ ] Stage 0.5: stated understanding, resolved BLOCKING questions, user confirmed intent before spec was written
+- [ ] `ExitPlanMode` called after `agent_verification/SUMMARY.md` written; user approved plan + reviewer-findings table before Stage 4 began
 - [ ] All CRITICAL + HIGH findings addressed (or deferred with user approval)
 - [ ] If any reviewer was NEEDS_REVISION/DO_NOT_SHIP at first pass: agents re-ran after fixes; verdicts upgraded; documented in SUMMARY.md
 - [ ] If all reviewers approved at first pass: explicit "Stage 5 skipped" note in SUMMARY.md
@@ -1560,6 +1623,8 @@ Final:
 - [ ] `agent_verification/round-1-fixes.md` written; CRITICAL/HIGH findings addressed
 - [ ] If CRITICALs remained after round 1: `round-2-{architect-reviewer,tester}.{md,json}` present; zero CRITICALs in round-2 JSONs
 - [ ] `agent_verification/SUMMARY.md` exists
+- [ ] Stage 0.5: stated understanding, resolved BLOCKING questions, user confirmed intent before spec was written
+- [ ] `ExitPlanMode` called after `agent_verification/SUMMARY.md` written; user approved plan + reviewer-findings table before Stage 4 began
 - [ ] Per phase: `phase-N-<topic>.md`, `phase-N-verify.md` (committed before run), `phase-N-evidence.md` (committed after), `phase-N-summary.md`
 - [ ] Tests written first, RED → GREEN; all existing tests pass
 - [ ] Phase-end: `code-reviewer` + `phase-auditor` approved; `phase-N-verification/SUMMARY.md` exists
