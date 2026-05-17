@@ -206,7 +206,7 @@ class TestPhase1RealCallPaths:
 
     def _make_mock_response(self, findings: list | None = None,
                             verdict: str = "approve") -> MagicMock:
-        """Build a mock openai.responses.create return value."""
+        """Build a mock openai.responses.create return value (non-truncated)."""
         payload = {
             "reviewer": "openai",
             "schema_version": "1.0",
@@ -216,8 +216,38 @@ class TestPhase1RealCallPaths:
             "findings": findings or [],
         }
         mock_resp = MagicMock()
+        mock_resp.incomplete_details = None  # MagicMock attrs are truthy by default
+        mock_resp.status = "completed"
         mock_resp.output_text = json.dumps(payload)
         return mock_resp
+
+    def _run_main(self, mock_openai, argv, env_overrides=None,
+                  extra_patches=None) -> tuple[int, Any]:
+        """Load the script and call main() with given argv and module patches.
+
+        Returns (exit_code, output_path_str_from_argv).
+        """
+        import importlib.util
+        # Use a fresh module for each call to avoid state leakage
+        spec = importlib.util.spec_from_file_location(f"_oai_{id(self)}", SCRIPT)
+        mod = importlib.util.module_from_spec(spec)
+
+        patches = [patch.dict("sys.modules", {"openai": mock_openai})]
+        if extra_patches:
+            patches.extend(extra_patches)
+
+        ctx = patch("sys.argv", argv)
+        with ctx:
+            for p in patches:
+                p.start()
+            try:
+                spec.loader.exec_module(mod)
+                with pytest.raises(SystemExit) as exc_info:
+                    mod.main()
+            finally:
+                for p in reversed(patches):
+                    p.stop()
+        return exc_info.value.code
 
     def test_mocked_diff_exits_0_status_ok(self, tmp_path, monkeypatch):
         """mode=code with mocked valid OpenAI response → exit 0, status=ok."""
@@ -225,22 +255,18 @@ class TestPhase1RealCallPaths:
         monkeypatch.setenv("TLMFORGE_ENABLE_OPENAI", "1")
         monkeypatch.setenv("OPENAI_API_KEY", "test-key")
 
-        import importlib
-        spec = importlib.util.spec_from_file_location("openai_script", SCRIPT)
-        mod = importlib.util.module_from_spec(spec)
-
         mock_client = MagicMock()
         mock_client.responses.create.return_value = self._make_mock_response()
         mock_openai = MagicMock()
         mock_openai.OpenAI.return_value = mock_client
+        mock_openai.APIError = Exception
 
-        with patch.dict("sys.modules", {"openai": mock_openai}):
-            with patch("subprocess.check_output", return_value=b"diff --git a/f\n+added"):
-                with patch("sys.argv", [str(SCRIPT), "--output", out,
-                                        "--iteration", "1", "--mode", "code"]):
-                    with pytest.raises(SystemExit) as exc_info:
-                        spec.loader.exec_module(mod)
-        assert exc_info.value.code == 0
+        argv = [str(SCRIPT), "--output", out, "--iteration", "1", "--mode", "code"]
+        code = self._run_main(
+            mock_openai, argv,
+            extra_patches=[patch("subprocess.check_output", return_value=b"diff --git a/f\n+added")],
+        )
+        assert code == 0
         data = load_json(out)
         assert data["status"] == "ok"
         assert data["reviewer"] == "openai"
@@ -252,28 +278,23 @@ class TestPhase1RealCallPaths:
         feature_dir = tmp_path / "specs" / "my-feature"
         feature_dir.mkdir(parents=True)
         (feature_dir / "README.md").write_text("# my-feature plan\n")
-        marker = tmp_path / ".tlmforge_active_feature"
-        marker.write_text("my-feature\n")
+        (tmp_path / "specs" / ".tlmforge_active_feature").write_text("my-feature\n")
 
         monkeypatch.setenv("TLMFORGE_ENABLE_OPENAI", "1")
         monkeypatch.setenv("OPENAI_API_KEY", "test-key")
-
-        import importlib
-        spec = importlib.util.spec_from_file_location("openai_script", SCRIPT)
-        mod = importlib.util.module_from_spec(spec)
 
         mock_client = MagicMock()
         mock_client.responses.create.return_value = self._make_mock_response()
         mock_openai = MagicMock()
         mock_openai.OpenAI.return_value = mock_client
+        mock_openai.APIError = Exception
 
-        with patch.dict("sys.modules", {"openai": mock_openai}):
-            with patch("pathlib.Path.cwd", return_value=tmp_path):
-                with patch("sys.argv", [str(SCRIPT), "--output", out,
-                                        "--iteration", "1", "--mode", "plan"]):
-                    with pytest.raises(SystemExit) as exc_info:
-                        spec.loader.exec_module(mod)
-        assert exc_info.value.code == 0
+        argv = [str(SCRIPT), "--output", out, "--iteration", "1", "--mode", "plan"]
+        code = self._run_main(
+            mock_openai, argv,
+            extra_patches=[patch("pathlib.Path.cwd", return_value=tmp_path)],
+        )
+        assert code == 0
         data = load_json(out)
         assert data["status"] == "ok"
 
@@ -283,21 +304,17 @@ class TestPhase1RealCallPaths:
         monkeypatch.setenv("TLMFORGE_ENABLE_OPENAI", "1")
         monkeypatch.setenv("OPENAI_API_KEY", "test-key")
 
-        import importlib
-        spec = importlib.util.spec_from_file_location("openai_script2", SCRIPT)
-        mod = importlib.util.module_from_spec(spec)
-
         mock_client = MagicMock()
         mock_openai = MagicMock()
         mock_openai.OpenAI.return_value = mock_client
+        mock_openai.APIError = Exception
 
-        with patch.dict("sys.modules", {"openai": mock_openai}):
-            with patch("subprocess.check_output", return_value=b"   \n  "):
-                with patch("sys.argv", [str(SCRIPT), "--output", out,
-                                        "--iteration", "1", "--mode", "code"]):
-                    with pytest.raises(SystemExit) as exc_info:
-                        spec.loader.exec_module(mod)
-        assert exc_info.value.code == 2
+        argv = [str(SCRIPT), "--output", out, "--iteration", "1", "--mode", "code"]
+        code = self._run_main(
+            mock_openai, argv,
+            extra_patches=[patch("subprocess.check_output", return_value=b"   \n  ")],
+        )
+        assert code == 2
         data = load_json(out)
         assert data["status"] == "skipped"
         mock_client.responses.create.assert_not_called()
@@ -308,30 +325,30 @@ class TestPhase1RealCallPaths:
         monkeypatch.setenv("TLMFORGE_ENABLE_OPENAI", "1")
         monkeypatch.setenv("OPENAI_API_KEY", "test-key")
 
-        import importlib
-        spec = importlib.util.spec_from_file_location("openai_script3", SCRIPT)
-        mod = importlib.util.module_from_spec(spec)
-
         valid_resp = MagicMock()
+        valid_resp.incomplete_details = None
+        valid_resp.status = "completed"
         valid_resp.output_text = json.dumps({
             "reviewer": "openai", "schema_version": "1.0", "iteration": 1,
             "status": "ok", "verdict": "approve", "findings": [],
         })
         invalid_resp = MagicMock()
+        invalid_resp.incomplete_details = None
+        invalid_resp.status = "completed"
         invalid_resp.output_text = "not json at all {"
 
         mock_client = MagicMock()
         mock_client.responses.create.side_effect = [invalid_resp, valid_resp]
         mock_openai = MagicMock()
         mock_openai.OpenAI.return_value = mock_client
+        mock_openai.APIError = Exception
 
-        with patch.dict("sys.modules", {"openai": mock_openai}):
-            with patch("subprocess.check_output", return_value=b"diff content here"):
-                with patch("sys.argv", [str(SCRIPT), "--output", out,
-                                        "--iteration", "1", "--mode", "code"]):
-                    with pytest.raises(SystemExit) as exc_info:
-                        spec.loader.exec_module(mod)
-        assert exc_info.value.code == 0
+        argv = [str(SCRIPT), "--output", out, "--iteration", "1", "--mode", "code"]
+        code = self._run_main(
+            mock_openai, argv,
+            extra_patches=[patch("subprocess.check_output", return_value=b"diff content here")],
+        )
+        assert code == 0
         data = load_json(out)
         assert data["status"] == "ok"
         assert mock_client.responses.create.call_count == 2
@@ -342,11 +359,9 @@ class TestPhase1RealCallPaths:
         monkeypatch.setenv("TLMFORGE_ENABLE_OPENAI", "1")
         monkeypatch.setenv("OPENAI_API_KEY", "test-key")
 
-        import importlib
-        spec = importlib.util.spec_from_file_location("openai_script4", SCRIPT)
-        mod = importlib.util.module_from_spec(spec)
-
         invalid_resp = MagicMock()
+        invalid_resp.incomplete_details = None
+        invalid_resp.status = "completed"
         invalid_resp.output_text = json.dumps({
             "reviewer": "openai", "schema_version": "1.0", "iteration": 1,
             "status": "ok", "verdict": "needs_revision",
@@ -354,6 +369,8 @@ class TestPhase1RealCallPaths:
                           "file": "f.py", "finding": "bad", "suggested_fix": "fix it"}],
         })
         valid_resp = MagicMock()
+        valid_resp.incomplete_details = None
+        valid_resp.status = "completed"
         valid_resp.output_text = json.dumps({
             "reviewer": "openai", "schema_version": "1.0", "iteration": 1,
             "status": "ok", "verdict": "needs_revision",
@@ -365,14 +382,14 @@ class TestPhase1RealCallPaths:
         mock_client.responses.create.side_effect = [invalid_resp, valid_resp]
         mock_openai = MagicMock()
         mock_openai.OpenAI.return_value = mock_client
+        mock_openai.APIError = Exception
 
-        with patch.dict("sys.modules", {"openai": mock_openai}):
-            with patch("subprocess.check_output", return_value=b"diff content here"):
-                with patch("sys.argv", [str(SCRIPT), "--output", out,
-                                        "--iteration", "1", "--mode", "code"]):
-                    with pytest.raises(SystemExit) as exc_info:
-                        spec.loader.exec_module(mod)
-        assert exc_info.value.code == 0
+        argv = [str(SCRIPT), "--output", out, "--iteration", "1", "--mode", "code"]
+        code = self._run_main(
+            mock_openai, argv,
+            extra_patches=[patch("subprocess.check_output", return_value=b"diff content here")],
+        )
+        assert code == 0
         data = load_json(out)
         assert data["status"] == "ok"
 
@@ -384,78 +401,65 @@ class TestPhase1RealCallPaths:
         monkeypatch.setenv("OPENAI_API_KEY", "test-key")
         monkeypatch.setenv("TLMFORGE_LLM_LOG", str(log_file))
 
-        import importlib
-        spec = importlib.util.spec_from_file_location("openai_script5", SCRIPT)
-        mod = importlib.util.module_from_spec(spec)
-
         bad_resp = MagicMock()
+        bad_resp.incomplete_details = None  # not truncated — should try JSON parse and fail
+        bad_resp.status = "completed"
         bad_resp.output_text = "not json {"
         mock_client = MagicMock()
         mock_client.responses.create.side_effect = [bad_resp, bad_resp]
         mock_openai = MagicMock()
         mock_openai.OpenAI.return_value = mock_client
+        mock_openai.APIError = Exception
 
-        with patch.dict("sys.modules", {"openai": mock_openai}):
-            with patch("subprocess.check_output", return_value=b"diff content here"):
-                with patch("sys.argv", [str(SCRIPT), "--output", out,
-                                        "--iteration", "1", "--mode", "code"]):
-                    with pytest.raises(SystemExit) as exc_info:
-                        spec.loader.exec_module(mod)
-        assert exc_info.value.code == 2
+        argv = [str(SCRIPT), "--output", out, "--iteration", "1", "--mode", "code"]
+        code = self._run_main(
+            mock_openai, argv,
+            extra_patches=[patch("subprocess.check_output", return_value=b"diff content here")],
+        )
+        assert code == 2
         data = load_json(out)
         assert data["status"] == "skipped"
         assert data["reviewer"] == "openai"
         assert log_file.exists(), "failure must be logged"
 
     def test_auth_error_exits_2_skipped_logged(self, tmp_path, monkeypatch):
-        """Auth error (mocked openai.AuthenticationError) → exit 2, status=skipped, logged."""
+        """Auth error (mocked openai.APIError) → exit 2, status=skipped, logged."""
         out = str(tmp_path / "r.json")
         log_file = tmp_path / "llm_reviewer.log"
         monkeypatch.setenv("TLMFORGE_ENABLE_OPENAI", "1")
         monkeypatch.setenv("OPENAI_API_KEY", "bad-key")
         monkeypatch.setenv("TLMFORGE_LLM_LOG", str(log_file))
 
-        import importlib
-        spec = importlib.util.spec_from_file_location("openai_script6", SCRIPT)
-        mod = importlib.util.module_from_spec(spec)
+        class FakeAPIError(Exception):
+            pass
 
         mock_openai = MagicMock()
         mock_client = MagicMock()
-
-        class FakeAuthError(Exception):
-            pass
-
-        mock_openai.AuthenticationError = FakeAuthError
-        mock_openai.APIError = FakeAuthError
-        mock_client.responses.create.side_effect = FakeAuthError("invalid key")
+        mock_openai.APIError = FakeAPIError
+        mock_client.responses.create.side_effect = FakeAPIError("invalid key")
         mock_openai.OpenAI.return_value = mock_client
 
-        with patch.dict("sys.modules", {"openai": mock_openai}):
-            with patch("subprocess.check_output", return_value=b"diff content here"):
-                with patch("sys.argv", [str(SCRIPT), "--output", out,
-                                        "--iteration", "1", "--mode", "code"]):
-                    with pytest.raises(SystemExit) as exc_info:
-                        spec.loader.exec_module(mod)
-        assert exc_info.value.code == 2
+        argv = [str(SCRIPT), "--output", out, "--iteration", "1", "--mode", "code"]
+        code = self._run_main(
+            mock_openai, argv,
+            extra_patches=[patch("subprocess.check_output", return_value=b"diff content here")],
+        )
+        assert code == 2
         data = load_json(out)
         assert data["status"] == "skipped"
         assert log_file.exists()
 
     def test_truncated_response_exits_2_skipped_logged(self, tmp_path, monkeypatch):
-        """Truncated response (finish_reason=length or incomplete flag) → retry → still truncated → exit 2, skipped."""
+        """Truncated response (incomplete_details set) → retry → still truncated → exit 2, skipped."""
         out = str(tmp_path / "r.json")
         log_file = tmp_path / "llm_reviewer.log"
         monkeypatch.setenv("TLMFORGE_ENABLE_OPENAI", "1")
         monkeypatch.setenv("OPENAI_API_KEY", "test-key")
         monkeypatch.setenv("TLMFORGE_LLM_LOG", str(log_file))
 
-        import importlib
-        spec = importlib.util.spec_from_file_location("openai_script7", SCRIPT)
-        mod = importlib.util.module_from_spec(spec)
-
         truncated_resp = MagicMock()
-        truncated_resp.output_text = '{"reviewer": "openai", "findings": ['  # truncated
-        truncated_resp.incomplete_details = MagicMock()  # indicates truncation
+        truncated_resp.output_text = '{"reviewer": "openai", "findings": ['
+        truncated_resp.incomplete_details = MagicMock()  # non-None → truncated
 
         mock_client = MagicMock()
         mock_client.responses.create.side_effect = [truncated_resp, truncated_resp]
@@ -463,13 +467,12 @@ class TestPhase1RealCallPaths:
         mock_openai.OpenAI.return_value = mock_client
         mock_openai.APIError = Exception
 
-        with patch.dict("sys.modules", {"openai": mock_openai}):
-            with patch("subprocess.check_output", return_value=b"diff content here"):
-                with patch("sys.argv", [str(SCRIPT), "--output", out,
-                                        "--iteration", "1", "--mode", "code"]):
-                    with pytest.raises(SystemExit) as exc_info:
-                        spec.loader.exec_module(mod)
-        assert exc_info.value.code == 2
+        argv = [str(SCRIPT), "--output", out, "--iteration", "1", "--mode", "code"]
+        code = self._run_main(
+            mock_openai, argv,
+            extra_patches=[patch("subprocess.check_output", return_value=b"diff content here")],
+        )
+        assert code == 2
         data = load_json(out)
         assert data["status"] == "skipped"
         assert log_file.exists()
@@ -480,81 +483,75 @@ class TestPhase1RealCallPaths:
         monkeypatch.setenv("TLMFORGE_ENABLE_OPENAI", "1")
         monkeypatch.setenv("OPENAI_API_KEY", "test-key")
 
-        import importlib
-        spec = importlib.util.spec_from_file_location("openai_script8", SCRIPT)
-        mod = importlib.util.module_from_spec(spec)
         mock_openai = MagicMock()
+        mock_openai.APIError = Exception
 
-        with patch.dict("sys.modules", {"openai": mock_openai}):
-            with patch("pathlib.Path.cwd", return_value=tmp_path):
-                with patch("sys.argv", [str(SCRIPT), "--output", out,
-                                        "--iteration", "1", "--mode", "plan"]):
-                    with pytest.raises(SystemExit) as exc_info:
-                        spec.loader.exec_module(mod)
-        assert exc_info.value.code == 2
+        argv = [str(SCRIPT), "--output", out, "--iteration", "1", "--mode", "plan"]
+        code = self._run_main(
+            mock_openai, argv,
+            extra_patches=[patch("pathlib.Path.cwd", return_value=tmp_path)],
+        )
+        assert code == 2
         data = load_json(out)
         assert data["status"] == "skipped"
 
     def test_plan_path_traversal_marker_exits_2_skipped(self, tmp_path, monkeypatch):
-        """mode=plan with marker containing '../foo' → exit 2, skipped (path traversal blocked)."""
+        """mode=plan with marker '../etc/passwd' → exit 2, skipped (path traversal blocked)."""
         out = str(tmp_path / "r.json")
-        (tmp_path / ".tlmforge_active_feature").write_text("../etc/passwd\n")
+        specs_dir = tmp_path / "specs"
+        specs_dir.mkdir()
+        (specs_dir / ".tlmforge_active_feature").write_text("../etc/passwd\n")
         monkeypatch.setenv("TLMFORGE_ENABLE_OPENAI", "1")
         monkeypatch.setenv("OPENAI_API_KEY", "test-key")
 
-        import importlib
-        spec = importlib.util.spec_from_file_location("openai_script9", SCRIPT)
-        mod = importlib.util.module_from_spec(spec)
         mock_openai = MagicMock()
+        mock_openai.APIError = Exception
 
-        with patch.dict("sys.modules", {"openai": mock_openai}):
-            with patch("pathlib.Path.cwd", return_value=tmp_path):
-                with patch("sys.argv", [str(SCRIPT), "--output", out,
-                                        "--iteration", "1", "--mode", "plan"]):
-                    with pytest.raises(SystemExit) as exc_info:
-                        spec.loader.exec_module(mod)
-        assert exc_info.value.code == 2
+        argv = [str(SCRIPT), "--output", out, "--iteration", "1", "--mode", "plan"]
+        code = self._run_main(
+            mock_openai, argv,
+            extra_patches=[patch("pathlib.Path.cwd", return_value=tmp_path)],
+        )
+        assert code == 2
         data = load_json(out)
         assert data["status"] == "skipped"
 
     def test_plan_marker_with_spaces_exits_2_skipped(self, tmp_path, monkeypatch):
         """mode=plan with marker 'my feature' (spaces) → exit 2, skipped."""
         out = str(tmp_path / "r.json")
-        (tmp_path / ".tlmforge_active_feature").write_text("my feature\n")
+        specs_dir = tmp_path / "specs"
+        specs_dir.mkdir()
+        (specs_dir / ".tlmforge_active_feature").write_text("my feature\n")
         monkeypatch.setenv("TLMFORGE_ENABLE_OPENAI", "1")
         monkeypatch.setenv("OPENAI_API_KEY", "test-key")
 
-        import importlib
-        spec = importlib.util.spec_from_file_location("openai_script10", SCRIPT)
-        mod = importlib.util.module_from_spec(spec)
         mock_openai = MagicMock()
+        mock_openai.APIError = Exception
 
-        with patch.dict("sys.modules", {"openai": mock_openai}):
-            with patch("pathlib.Path.cwd", return_value=tmp_path):
-                with patch("sys.argv", [str(SCRIPT), "--output", out,
-                                        "--iteration", "1", "--mode", "plan"]):
-                    with pytest.raises(SystemExit) as exc_info:
-                        spec.loader.exec_module(mod)
-        assert exc_info.value.code == 2
+        argv = [str(SCRIPT), "--output", out, "--iteration", "1", "--mode", "plan"]
+        code = self._run_main(
+            mock_openai, argv,
+            extra_patches=[patch("pathlib.Path.cwd", return_value=tmp_path)],
+        )
+        assert code == 2
         data = load_json(out)
         assert data["status"] == "skipped"
 
     def test_plan_marker_with_trailing_newline_works(self, tmp_path, monkeypatch):
-        """mode=plan with marker 'my-feature\\n' (trailing newline from echo) → strip + validate → valid."""
+        """mode=plan with marker 'my-feature\\n' from echo → strip → valid feature name."""
         out = str(tmp_path / "r.json")
-        feature_dir = tmp_path / "specs" / "my-feature"
+        specs_dir = tmp_path / "specs"
+        feature_dir = specs_dir / "my-feature"
         feature_dir.mkdir(parents=True)
         (feature_dir / "README.md").write_text("# plan\n")
-        (tmp_path / ".tlmforge_active_feature").write_text("my-feature\n")
+        (specs_dir / ".tlmforge_active_feature").write_text("my-feature\n")
 
         monkeypatch.setenv("TLMFORGE_ENABLE_OPENAI", "1")
         monkeypatch.setenv("OPENAI_API_KEY", "test-key")
 
-        import importlib
-        spec = importlib.util.spec_from_file_location("openai_script11", SCRIPT)
-        mod = importlib.util.module_from_spec(spec)
-
         mock_resp = MagicMock()
+        mock_resp.incomplete_details = None
+        mock_resp.status = "completed"
         mock_resp.output_text = json.dumps({
             "reviewer": "openai", "schema_version": "1.0", "iteration": 1,
             "status": "ok", "verdict": "approve", "findings": [],
@@ -565,31 +562,28 @@ class TestPhase1RealCallPaths:
         mock_openai.OpenAI.return_value = mock_client
         mock_openai.APIError = Exception
 
-        with patch.dict("sys.modules", {"openai": mock_openai}):
-            with patch("pathlib.Path.cwd", return_value=tmp_path):
-                with patch("sys.argv", [str(SCRIPT), "--output", out,
-                                        "--iteration", "1", "--mode", "plan"]):
-                    with pytest.raises(SystemExit) as exc_info:
-                        spec.loader.exec_module(mod)
-        # Must NOT be 2 (skipped due to marker) — trailing newline was stripped
-        assert exc_info.value.code == 0
+        argv = [str(SCRIPT), "--output", out, "--iteration", "1", "--mode", "plan"]
+        code = self._run_main(
+            mock_openai, argv,
+            extra_patches=[patch("pathlib.Path.cwd", return_value=tmp_path)],
+        )
+        assert code == 0, "trailing newline must not cause skip"
         data = load_json(out)
         assert data["reviewer"] == "openai"
 
     def test_reviewer_field_always_openai(self, tmp_path, monkeypatch):
-        """REVIEWER_NAME must be 'openai' regardless of TLMFORGE_OPENAI_MODEL."""
+        """reviewer must be 'openai' regardless of TLMFORGE_OPENAI_MODEL."""
         out = str(tmp_path / "r.json")
         monkeypatch.setenv("TLMFORGE_ENABLE_OPENAI", "1")
         monkeypatch.setenv("OPENAI_API_KEY", "test-key")
         monkeypatch.setenv("TLMFORGE_OPENAI_MODEL", "gpt-99-turbo")
 
-        import importlib
-        spec = importlib.util.spec_from_file_location("openai_script12", SCRIPT)
-        mod = importlib.util.module_from_spec(spec)
-
         mock_resp = MagicMock()
+        mock_resp.incomplete_details = None
+        mock_resp.status = "completed"
         mock_resp.output_text = json.dumps({
-            "reviewer": "openai", "schema_version": "1.0", "iteration": 1,
+            "reviewer": "gpt-99-turbo",  # LLM might write this; must be overwritten
+            "schema_version": "1.0", "iteration": 1,
             "status": "ok", "verdict": "approve", "findings": [],
         })
         mock_client = MagicMock()
@@ -598,27 +592,24 @@ class TestPhase1RealCallPaths:
         mock_openai.OpenAI.return_value = mock_client
         mock_openai.APIError = Exception
 
-        with patch.dict("sys.modules", {"openai": mock_openai}):
-            with patch("subprocess.check_output", return_value=b"some diff content"):
-                with patch("sys.argv", [str(SCRIPT), "--output", out,
-                                        "--iteration", "1", "--mode", "code"]):
-                    with pytest.raises(SystemExit) as exc_info:
-                        spec.loader.exec_module(mod)
-        assert exc_info.value.code == 0
+        argv = [str(SCRIPT), "--output", out, "--iteration", "1", "--mode", "code"]
+        code = self._run_main(
+            mock_openai, argv,
+            extra_patches=[patch("subprocess.check_output", return_value=b"some diff content")],
+        )
+        assert code == 0
         data = load_json(out)
         assert data["reviewer"] == "openai"
 
     def test_all_output_json_validates_schema(self, tmp_path, monkeypatch):
-        """status=ok output must validate required schema fields."""
+        """status=ok output must have all required schema fields."""
         out = str(tmp_path / "r.json")
         monkeypatch.setenv("TLMFORGE_ENABLE_OPENAI", "1")
         monkeypatch.setenv("OPENAI_API_KEY", "test-key")
 
-        import importlib
-        spec = importlib.util.spec_from_file_location("openai_script13", SCRIPT)
-        mod = importlib.util.module_from_spec(spec)
-
         mock_resp = MagicMock()
+        mock_resp.incomplete_details = None
+        mock_resp.status = "completed"
         mock_resp.output_text = json.dumps({
             "reviewer": "openai", "schema_version": "1.0", "iteration": 1,
             "status": "ok", "verdict": "approve", "findings": [],
@@ -629,13 +620,12 @@ class TestPhase1RealCallPaths:
         mock_openai.OpenAI.return_value = mock_client
         mock_openai.APIError = Exception
 
-        with patch.dict("sys.modules", {"openai": mock_openai}):
-            with patch("subprocess.check_output", return_value=b"some diff content"):
-                with patch("sys.argv", [str(SCRIPT), "--output", out,
-                                        "--iteration", "1", "--mode", "code"]):
-                    with pytest.raises(SystemExit) as exc_info:
-                        spec.loader.exec_module(mod)
-        assert exc_info.value.code == 0
+        argv = [str(SCRIPT), "--output", out, "--iteration", "1", "--mode", "code"]
+        code = self._run_main(
+            mock_openai, argv,
+            extra_patches=[patch("subprocess.check_output", return_value=b"some diff content")],
+        )
+        assert code == 0
         data = load_json(out)
         validate_schema_fields(data)
 
@@ -645,11 +635,9 @@ class TestPhase1RealCallPaths:
         monkeypatch.setenv("TLMFORGE_ENABLE_OPENAI", "1")
         monkeypatch.setenv("OPENAI_API_KEY", "test-key")
 
-        import importlib
-        spec = importlib.util.spec_from_file_location("openai_script14", SCRIPT)
-        mod = importlib.util.module_from_spec(spec)
-
         mock_resp = MagicMock()
+        mock_resp.incomplete_details = None
+        mock_resp.status = "completed"
         mock_resp.output_text = json.dumps({
             "reviewer": "openai", "schema_version": "1.0", "iteration": 1,
             "status": "ok", "verdict": "needs_revision",
@@ -663,13 +651,12 @@ class TestPhase1RealCallPaths:
         mock_openai.OpenAI.return_value = mock_client
         mock_openai.APIError = Exception
 
-        with patch.dict("sys.modules", {"openai": mock_openai}):
-            with patch("subprocess.check_output", return_value=b"some diff content"):
-                with patch("sys.argv", [str(SCRIPT), "--output", out,
-                                        "--iteration", "1", "--mode", "code"]):
-                    with pytest.raises(SystemExit) as exc_info:
-                        spec.loader.exec_module(mod)
-        assert exc_info.value.code == 0
+        argv = [str(SCRIPT), "--output", out, "--iteration", "1", "--mode", "code"]
+        code = self._run_main(
+            mock_openai, argv,
+            extra_patches=[patch("subprocess.check_output", return_value=b"some diff content")],
+        )
+        assert code == 0
         data = load_json(out)
         for finding in data["findings"]:
             if finding["severity"] == "critical":
