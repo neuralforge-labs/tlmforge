@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.5.11 (2026-05-17)
+
+### Two mandatory user-approval gates in feature-development skill
+
+**Stage 0.5 — Understanding confirmation:** Before writing any spec or plan,
+Claude states its understanding in 2–3 sentences, lists open questions tagged
+`[BLOCKING]` or `[INFORMATIONAL]`, and uses `AskUserQuestion` if any blocking
+questions exist or the understanding is non-trivial. Stage 1 begins only after
+the user confirms. Applies to all work requests (Light, Medium, Deep).
+
+**Stage 3→4 approval gate:** After multi-agent review converges (SUMMARY.md
+written, all reviewers approved, zero CRITICALs), Claude calls `ExitPlanMode`
+with the master plan (`specs/<feature>/README.md`) and a reviewer-findings table
+showing what each reviewer flagged and how each finding was resolved. Stage 4
+begins only after the user explicitly approves. Applies to both Medium and Deep
+paths.
+
+**Opt-out:** Set `TLMFORGE_APPROVAL_GATES=0` to disable both gates (consistent
+with the existing `TLMFORGE_HOOKS=0` escape-hatch convention).
+
+---
+
 ## 0.5.10 (2026-05-16)
 
 ### Hook 2 made advisory
