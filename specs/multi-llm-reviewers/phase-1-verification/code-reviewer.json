@@ -1,0 +1,89 @@
+{
+  "reviewer": "code-reviewer",
+  "schema_version": "1.0",
+  "iteration": 1,
+  "status": "ok",
+  "verdict": "needs_revision",
+  "findings": [
+    {
+      "severity": "critical",
+      "category": "bug",
+      "file": "skills/feature-development/ai_review_json_openai.py",
+      "line": 180,
+      "finding": "skip() inner function accepts a reason parameter but never calls _log_failure(reason). The four pre-flight skip paths (TLMFORGE_ENABLE_OPENAI unset at line 185, OPENAI_API_KEY unset at line 189, TLMFORGE_OPENAI_SDK_ABSENT at line 192, ImportError at line 197) produce zero log output. The spec (README.md line 64) requires all failures to be logged to ~/.cache/tlmforge/llm_reviewer.log for user debugging. A user with an expired or absent key has no diagnostic signal.",
+      "suggested_fix": "Add _log_failure(reason) as the first line of skip(): def skip(reason: str) -> None: _log_failure(reason); _write_atomic(output_path, _skipped_json(iteration)); sys.exit(2). Then extend the three existing pre-flight skip tests to assert log_file.exists() using TLMFORGE_LLM_LOG, mirroring the pattern in test_auth_error_exits_2_skipped_logged."
+    },
+    {
+      "severity": "critical",
+      "category": "missing_error_handling",
+      "file": "skills/feature-development/ai_review_json_openai.py",
+      "line": 67,
+      "finding": "_write_atomic re-raises any exception (disk full, permissions error) from the tempfile write or os.replace(). The exception propagates unhandled through main(), causing Python to exit with code 1 (not in the documented exit-code contract) and printing a traceback to stderr. No sidecar JSON is written. The convergence engine then injects a false reviewer_json_missing CRITICAL. This affects both call sites: line 181 (inside skip()) and line 275 (happy-path write).",
+      "suggested_fix": "Wrap the final _write_atomic call at line 275 in a try/except: catch Exception, call _log_failure(), best-effort write _skipped_json(), exit 2. For the skip() call site, wrap skip()'s body in try/except so an infrastructure failure does not propagate as exit 1. The _write_atomic helper itself should remain thin (raise is correct there); the boundary handling belongs in main()."
+    },
+    {
+      "severity": "high",
+      "category": "bug",
+      "file": "skills/feature-development/ai_review_openai.sh",
+      "line": 36,
+      "finding": "Shell wrapper validates --iteration with regex ^[0-9]+$ which accepts 0. The Python script does int(args.iteration) with no minimum check. Output JSON will contain iteration: 0, violating review_schema.json minimum: 1. No test covers --iteration 0 through either the shell or Python path.",
+      "suggested_fix": "Shell: change to ^[1-9][0-9]*$ or add [[ \"$ITERATION\" -lt 1 ]] check after the regex. Python: add 'if iteration < 1: print error; sys.exit(64)' after the int() parse at line 165. Add test_exit64_when_iteration_zero covering both paths."
+    },
+    {
+      "severity": "high",
+      "category": "logic_error",
+      "file": "skills/feature-development/ai_review_json_openai.py",
+      "line": 115,
+      "finding": "_validate_response_json checks that the 'verdict' key is present but does not validate its value against the allowed enum (approve, approve_with_warnings, needs_revision, do_not_ship). If the LLM returns 'verdict': 'APPROVE' or 'verdict': 'unknown', _normalize_response writes it through unchanged, producing a schema-invalid output file. The retry logic — which exists to handle malformed LLM output — never triggers for this case. Severity and category enums are correctly validated (lines 121-129); verdict was missed.",
+      "suggested_fix": "Add VALID_VERDICTS = {'approve', 'approve_with_warnings', 'needs_revision', 'do_not_ship'} constant. In _validate_response_json after the required-fields check, add: if data.get('verdict') not in VALID_VERDICTS: return None. Add a test where attempt 1 returns uppercase APPROVE and attempt 2 returns valid approve; assert exit 0 with valid verdict."
+    },
+    {
+      "severity": "medium",
+      "category": "test_coverage",
+      "file": "skills/feature-development/tests/test_openai_wrapper.py",
+      "line": 192,
+      "finding": "test_no_tmp_file_left_behind runs without TLMFORGE_ENABLE_OPENAI set, exercising only the _skipped_json() write path. The status=ok Phase 1 happy path has no assertion that no .tmp file is left behind after _write_atomic completes. ARCH-C3 regression guard is half-coverage only.",
+      "suggested_fix": "Add a test in TestPhase1RealCallPaths that mocks a valid response, asserts exit 0, then asserts list(tmp_path.glob('*.tmp')) == []."
+    },
+    {
+      "severity": "medium",
+      "category": "test_coverage",
+      "file": "skills/feature-development/tests/test_openai_wrapper.py",
+      "line": null,
+      "finding": "EC-10: _validate_response_json correctly rejects findings with an invalid category value (e.g., 'NOT_A_CATEGORY' not in VALID_CATEGORIES), but no test verifies this path. Removing or weakening the category validation would not fail any existing test.",
+      "suggested_fix": "Add test: both mock calls return findings with category='NOT_A_CATEGORY'; assert exit 2, status=skipped."
+    },
+    {
+      "severity": "low",
+      "category": "test_coverage",
+      "file": "skills/feature-development/tests/test_openai_wrapper.py",
+      "line": null,
+      "finding": "_is_truncated() branch 2 (response.status == 'incomplete' with incomplete_details=None) has no test. Only branch 1 (incomplete_details non-None) is covered. If branch 2 is broken, tests stay green while truncated responses pass through as valid.",
+      "suggested_fix": "Add test with truncated_resp.incomplete_details = None and truncated_resp.status = 'incomplete'; assert exit 2, status=skipped, log exists."
+    },
+    {
+      "severity": "low",
+      "category": "test_coverage",
+      "file": "skills/feature-development/tests/test_openai_wrapper.py",
+      "line": null,
+      "finding": "Generic Exception branch in call_api() (line 247) is untested. Only the openai.APIError branch is covered by test_auth_error_exits_2_skipped_logged. If the broad except clause is later narrowed to only APIError, the generic path silently stops catching network errors.",
+      "suggested_fix": "Add test where responses.create raises RuntimeError('timeout'); assert exit 2, status=skipped, log exists."
+    },
+    {
+      "severity": "low",
+      "category": "style",
+      "file": "skills/feature-development/ai_review_openai.sh",
+      "line": 47,
+      "finding": "Shell wrapper has dead branching logic: the if/else at lines 47-54 checks TLMFORGE_ENABLE_OPENAI and OPENAI_API_KEY but both branches call the Python script with identical arguments. The condition result is never used. This is a maintenance trap: a future developer adding branch-specific logic introduces a divergence. The correct pattern is a single unconditional delegation to the Python script.",
+      "suggested_fix": null
+    },
+    {
+      "severity": "nit",
+      "category": "observability",
+      "file": "skills/feature-development/ai_review_json_openai.py",
+      "line": 255,
+      "finding": "attempt() logs 'response truncated (incomplete_details set)' regardless of which _is_truncated branch fired. When branch 2 (status == incomplete) fires, the log message is technically incorrect, creating misleading debugging information.",
+      "suggested_fix": null
+    }
+  ]
+}

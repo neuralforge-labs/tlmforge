@@ -1,0 +1,64 @@
+{
+  "reviewer": "tester",
+  "schema_version": "1.0",
+  "iteration": 1,
+  "status": "ok",
+  "verdict": "approve_with_warnings",
+  "test_run": {
+    "command": "python3 -m pytest skills/feature-development/tests/ --ignore=skills/feature-development/tests/fixtures -v",
+    "total_passed": 84,
+    "total_failed": 0,
+    "openai_wrapper_passed": 31,
+    "preexisting_passed": 53,
+    "elapsed_seconds": 0.75,
+    "evidence_claim_match": true,
+    "evidence_claimed_total": 84
+  },
+  "ec_coverage": [
+    {"id": "EC-1",  "status": "covered",   "test": "test_auth_error_exits_2_skipped_logged"},
+    {"id": "EC-2",  "status": "covered",   "test": "test_empty_diff_exits_2_skipped"},
+    {"id": "EC-3",  "status": "partial",   "test": "test_truncated_response_exits_2_skipped_logged", "gap": "incomplete_details branch tested; response.status=incomplete branch untested"},
+    {"id": "EC-4",  "status": "covered",   "test": "test_retry_on_uppercase_severity_then_valid + test_both_calls_invalid_json_exits_2_skipped_logged"},
+    {"id": "EC-5",  "status": "covered",   "test": "test_plan_absent_marker_exits_2_skipped"},
+    {"id": "EC-6",  "status": "covered",   "test": "test_exit64_when_output_parent_missing"},
+    {"id": "EC-7",  "status": "covered",   "test": "test_reviewer_field_always_openai"},
+    {"id": "EC-8",  "status": "covered",   "test": "test_exit64_when_iteration_noninteger"},
+    {"id": "EC-9",  "status": "covered",   "test": "test_plan_marker_with_spaces_exits_2_skipped"},
+    {"id": "EC-10", "status": "partial",   "test": null, "gap": "implementation correct; no regression test for invalid category"},
+    {"id": "TM-C1", "status": "n/a",       "test": null, "note": "not a code-level concern; implementation uses Python SDK, no shell interpolation"},
+    {"id": "TM-C2", "status": "covered",   "test": "test_plan_path_traversal_marker_exits_2_skipped"},
+    {"id": "TM-H2", "status": "not_an_issue", "test": null, "note": "log is plain text, not JSON; no injection surface"},
+    {"id": "ARCH-C2", "status": "covered", "test": "static: client.responses.create() at line 237; client.chat.completions absent"},
+    {"id": "ARCH-C3", "status": "partial", "test": "test_no_tmp_file_left_behind", "gap": "covers skipped path only; status=ok atomic write cleanup not verified"}
+  ],
+  "findings": [
+    {
+      "severity": "medium",
+      "category": "test_coverage",
+      "file": "skills/feature-development/tests/test_openai_wrapper.py",
+      "finding": "test_no_tmp_file_left_behind only runs in skipped mode (no TLMFORGE_ENABLE_OPENAI). The status=ok Phase 1 happy path has no assertion that no .tmp file is left behind after _write_atomic completes. ARCH-C3 regression guard is half-coverage.",
+      "suggested_fix": "Add a Phase 1 test that mocks a valid response and asserts list(tmp_path.glob('*.tmp')) == [] after exit 0."
+    },
+    {
+      "severity": "medium",
+      "category": "test_coverage",
+      "file": "skills/feature-development/tests/test_openai_wrapper.py",
+      "finding": "EC-10: _validate_response_json correctly rejects invalid category values, but no test verifies this path. Removing category validation from _validate_response_json would not fail any test.",
+      "suggested_fix": "Add test: both mock calls return findings with category='NOT_A_CATEGORY'; assert exit 2, status=skipped."
+    },
+    {
+      "severity": "low",
+      "category": "test_coverage",
+      "file": "skills/feature-development/tests/test_openai_wrapper.py",
+      "finding": "_is_truncated() branch 2 (response.status == 'incomplete' with incomplete_details=None) has no test. Only branch 1 (incomplete_details non-None) is covered by test_truncated_response_exits_2_skipped_logged.",
+      "suggested_fix": "Add test with incomplete_details=None and status='incomplete'; assert exit 2, status=skipped, log exists."
+    },
+    {
+      "severity": "low",
+      "category": "test_coverage",
+      "file": "skills/feature-development/tests/test_openai_wrapper.py",
+      "finding": "Generic Exception branch in call_api() (line 247) is untested. Only openai.APIError branch is covered. If the broad except Exception clause is later narrowed, the generic path silently breaks.",
+      "suggested_fix": "Add test where responses.create raises RuntimeError; assert exit 2, status=skipped, log exists."
+    }
+  ]
+}

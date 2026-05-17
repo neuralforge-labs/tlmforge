@@ -28,6 +28,7 @@ VALID_MODES = {"code", "plan"}
 DEFAULT_MODEL = "gpt-5.5"
 
 VALID_SEVERITIES = {"critical", "high", "medium", "low", "nit"}
+VALID_VERDICTS = {"approve", "approve_with_warnings", "needs_revision", "do_not_ship"}
 VALID_CATEGORIES = {
     "security", "auth", "null_safety", "bug", "logic_error", "race_condition",
     "data_loss", "missing_error_handling", "test_coverage", "tdd_violation",
@@ -117,6 +118,8 @@ def _validate_response_json(text: str) -> dict | None:
         return None
     if not isinstance(data.get("findings"), list):
         return None
+    if data.get("verdict") not in VALID_VERDICTS:
+        return None
     # Validate enum fields in findings
     for finding in data["findings"]:
         if not isinstance(finding, dict):
@@ -167,6 +170,10 @@ def main() -> None:
         print(f"ERROR: --iteration must be an integer, got: {args.iteration!r}", file=sys.stderr)
         sys.exit(64)
 
+    if iteration < 1:
+        print(f"ERROR: --iteration must be >= 1, got: {iteration}", file=sys.stderr)
+        sys.exit(64)
+
     if args.mode not in VALID_MODES:
         print(f"ERROR: --mode must be one of {sorted(VALID_MODES)}, got: {args.mode!r}", file=sys.stderr)
         sys.exit(64)
@@ -178,6 +185,7 @@ def main() -> None:
 
     # --- Pre-flight checks (all → graceful skip) ---
     def skip(reason: str) -> None:
+        _log_failure(reason)
         _write_atomic(output_path, _skipped_json(iteration))
         sys.exit(2)
 
@@ -208,26 +216,21 @@ def main() -> None:
             diff_bytes = b""
         content = diff_bytes.decode("utf-8", errors="replace")
         if not content.strip():
-            _log_failure("empty git diff — skip")
-            skip("empty diff in mode=code")
+            skip("empty git diff")
     else:
         # mode=plan: read active-feature marker and load README.md
         cwd = Path.cwd()
         marker_path = cwd / "specs" / ".tlmforge_active_feature"
         if not marker_path.exists():
-            _log_failure("active-feature marker absent")
-            skip("active-feature marker not found")
+            skip("active-feature marker absent")
         raw_feature = marker_path.read_text(encoding="utf-8", errors="replace").strip()
         if not raw_feature:
-            _log_failure("active-feature marker is empty")
             skip("active-feature marker is empty")
         if not re.fullmatch(r"[a-zA-Z0-9_-]+", raw_feature):
-            _log_failure(f"active-feature marker failed validation: {raw_feature!r}")
-            skip("active-feature marker contains invalid characters")
+            skip(f"active-feature marker invalid: {raw_feature!r}")
         readme_path = cwd / "specs" / raw_feature / "README.md"
         if not readme_path.exists():
-            _log_failure(f"README not found at {readme_path}")
-            skip(f"README.md not found for feature: {raw_feature}")
+            skip(f"README not found: {readme_path}")
         content = readme_path.read_text(encoding="utf-8", errors="replace")
 
     # --- Call OpenAI Responses API (with retry once) ---
@@ -272,7 +275,15 @@ def main() -> None:
         skip("both API attempts failed or returned invalid response")
 
     final = _normalize_response(result, iteration)
-    _write_atomic(output_path, final)
+    try:
+        _write_atomic(output_path, final)
+    except Exception as exc:
+        _log_failure(f"atomic write failed: {exc}")
+        try:
+            _write_atomic(output_path, _skipped_json(iteration))
+        except Exception:
+            pass
+        sys.exit(2)
     sys.exit(0)
 
 

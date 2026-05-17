@@ -33,8 +33,8 @@ if [[ -z "$OUTPUT" || -z "$ITERATION" ]]; then
   exit 64
 fi
 
-if [[ ! "$ITERATION" =~ ^[0-9]+$ ]]; then
-  echo "ERROR: --iteration must be a non-negative integer, got: $ITERATION" >&2
+if [[ ! "$ITERATION" =~ ^[1-9][0-9]*$ ]]; then
+  echo "ERROR: --iteration must be a positive integer >= 1, got: $ITERATION" >&2
   exit 64
 fi
 

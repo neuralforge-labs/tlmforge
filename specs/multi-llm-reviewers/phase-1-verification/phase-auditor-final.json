@@ -1,0 +1,17 @@
+{
+  "reviewer": "phase-auditor",
+  "schema_version": "1.0",
+  "iteration": 2,
+  "status": "ok",
+  "verdict": "needs_revision",
+  "findings": [
+    {
+      "severity": "high",
+      "category": "bug",
+      "file": "skills/feature-development/ai_review_openai.sh",
+      "line": 36,
+      "finding": "HIGH-1 fix for shell wrapper is not committed. The spec required --iteration >= 1 enforcement in both Python and shell. The Python fix is in commit 44c0a78. The shell fix (^[0-9]+$ -> ^[1-9][0-9]*$) exists only as an uncommitted working-tree change. git show 44c0a78:skills/feature-development/ai_review_openai.sh still contains the Phase 0 regex. The test test_iteration_zero_exits_64 passes because it calls the Python script directly, not the shell wrapper — the shell-layer gap is untested in committed history.",
+      "suggested_fix": "Commit the working-tree change to ai_review_openai.sh (one-line diff already present). Add a companion test that invokes the shell wrapper via subprocess with --iteration 0 and asserts exit code 64."
+    }
+  ]
+}

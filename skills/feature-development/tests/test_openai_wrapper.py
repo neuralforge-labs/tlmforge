@@ -662,3 +662,259 @@ class TestPhase1RealCallPaths:
             if finding["severity"] == "critical":
                 assert "suggested_fix" in finding
                 assert len(finding["suggested_fix"]) >= 8
+
+    def test_truncation_via_status_field_exits_2_skipped(self, tmp_path, monkeypatch):
+        """EC-3 branch 2: response.status='incomplete' (incomplete_details=None) → truncated → skipped."""
+        out = str(tmp_path / "r.json")
+        log_file = tmp_path / "llm_reviewer.log"
+        monkeypatch.setenv("TLMFORGE_ENABLE_OPENAI", "1")
+        monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+        monkeypatch.setenv("TLMFORGE_LLM_LOG", str(log_file))
+
+        truncated_resp = MagicMock()
+        truncated_resp.incomplete_details = None  # no incomplete_details attribute
+        truncated_resp.status = "incomplete"       # but status field indicates truncation
+
+        mock_client = MagicMock()
+        mock_client.responses.create.side_effect = [truncated_resp, truncated_resp]
+        mock_openai = MagicMock()
+        mock_openai.OpenAI.return_value = mock_client
+        mock_openai.APIError = Exception
+
+        argv = [str(SCRIPT), "--output", out, "--iteration", "1", "--mode", "code"]
+        code = self._run_main(
+            mock_openai, argv,
+            extra_patches=[patch("subprocess.check_output", return_value=b"diff content here")],
+        )
+        assert code == 2
+        data = load_json(out)
+        assert data["status"] == "skipped"
+        assert log_file.exists()
+
+    def test_invalid_category_enum_exits_2_skipped(self, tmp_path, monkeypatch):
+        """EC-10 regression guard: invalid category on both retries → exit 2, status=skipped."""
+        out = str(tmp_path / "r.json")
+        log_file = tmp_path / "llm_reviewer.log"
+        monkeypatch.setenv("TLMFORGE_ENABLE_OPENAI", "1")
+        monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+        monkeypatch.setenv("TLMFORGE_LLM_LOG", str(log_file))
+
+        bad_resp = MagicMock()
+        bad_resp.incomplete_details = None
+        bad_resp.status = "completed"
+        bad_resp.output_text = json.dumps({
+            "reviewer": "openai", "schema_version": "1.0", "iteration": 1,
+            "status": "ok", "verdict": "needs_revision",
+            "findings": [{"severity": "critical", "category": "NOT_A_REAL_CATEGORY",
+                          "file": "f.py", "finding": "something bad", "suggested_fix": "fix it"}],
+        })
+
+        mock_client = MagicMock()
+        mock_client.responses.create.side_effect = [bad_resp, bad_resp]
+        mock_openai = MagicMock()
+        mock_openai.OpenAI.return_value = mock_client
+        mock_openai.APIError = Exception
+
+        argv = [str(SCRIPT), "--output", out, "--iteration", "1", "--mode", "code"]
+        code = self._run_main(
+            mock_openai, argv,
+            extra_patches=[patch("subprocess.check_output", return_value=b"diff content here")],
+        )
+        assert code == 2
+        data = load_json(out)
+        assert data["status"] == "skipped"
+
+    def test_generic_exception_in_api_call_exits_2_skipped(self, tmp_path, monkeypatch):
+        """Generic exception (not APIError) from responses.create → exit 2, status=skipped, logged."""
+        out = str(tmp_path / "r.json")
+        log_file = tmp_path / "llm_reviewer.log"
+        monkeypatch.setenv("TLMFORGE_ENABLE_OPENAI", "1")
+        monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+        monkeypatch.setenv("TLMFORGE_LLM_LOG", str(log_file))
+
+        mock_client = MagicMock()
+        mock_client.responses.create.side_effect = RuntimeError("connection timeout")
+        mock_openai = MagicMock()
+        mock_openai.OpenAI.return_value = mock_client
+        mock_openai.APIError = Exception  # RuntimeError is a subclass of Exception — still caught
+
+        argv = [str(SCRIPT), "--output", out, "--iteration", "1", "--mode", "code"]
+        code = self._run_main(
+            mock_openai, argv,
+            extra_patches=[patch("subprocess.check_output", return_value=b"diff content here")],
+        )
+        assert code == 2
+        data = load_json(out)
+        assert data["status"] == "skipped"
+        assert log_file.exists()
+
+    def test_no_tmp_file_after_status_ok_write(self, tmp_path, monkeypatch):
+        """ARCH-C3: atomic write in status=ok path leaves no .tmp files behind."""
+        out = str(tmp_path / "r.json")
+        monkeypatch.setenv("TLMFORGE_ENABLE_OPENAI", "1")
+        monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+
+        mock_resp = MagicMock()
+        mock_resp.incomplete_details = None
+        mock_resp.status = "completed"
+        mock_resp.output_text = json.dumps({
+            "reviewer": "openai", "schema_version": "1.0", "iteration": 1,
+            "status": "ok", "verdict": "approve", "findings": [],
+        })
+        mock_client = MagicMock()
+        mock_client.responses.create.return_value = mock_resp
+        mock_openai = MagicMock()
+        mock_openai.OpenAI.return_value = mock_client
+        mock_openai.APIError = Exception
+
+        argv = [str(SCRIPT), "--output", out, "--iteration", "1", "--mode", "code"]
+        code = self._run_main(
+            mock_openai, argv,
+            extra_patches=[patch("subprocess.check_output", return_value=b"some diff content")],
+        )
+        assert code == 0
+        leftover = list(tmp_path.glob("*.tmp"))
+        assert leftover == [], f"tmp files left behind after status=ok write: {leftover}"
+
+
+# ============================================================================
+# Phase 1 code-reviewer fixes — CRIT-1, CRIT-2, HIGH-1, HIGH-2
+# ============================================================================
+
+class TestPhase1CodeReviewerFixes:
+    """Regression tests for the 4 findings from the Phase 1 code-reviewer."""
+
+    def _run_main(self, mock_openai, argv, extra_patches=None) -> int:
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(f"_oai_{id(self)}", SCRIPT)
+        mod = importlib.util.module_from_spec(spec)
+        patches = [patch.dict("sys.modules", {"openai": mock_openai})]
+        if extra_patches:
+            patches.extend(extra_patches)
+        ctx = patch("sys.argv", argv)
+        with ctx:
+            for p in patches:
+                p.start()
+            try:
+                spec.loader.exec_module(mod)
+                with pytest.raises(SystemExit) as exc_info:
+                    mod.main()
+            finally:
+                for p in reversed(patches):
+                    p.stop()
+        return exc_info.value.code
+
+    # CRIT-1: skip() must call _log_failure(reason) before writing skipped JSON
+    def test_preflight_skip_flag_unset_logs_to_file(self, tmp_path):
+        """CRIT-1: skip() via TLMFORGE_ENABLE_OPENAI unset must log the skip reason."""
+        out = str(tmp_path / "r.json")
+        log_file = tmp_path / "llm_reviewer.log"
+        result = run_script(
+            ["--output", out, "--iteration", "1"],
+            env_overrides={"TLMFORGE_LLM_LOG": str(log_file)},
+        )
+        assert result.returncode == 2
+        assert log_file.exists(), "skip() must write to log even on pre-flight skip"
+        assert "openai" in log_file.read_text()
+
+    def test_preflight_skip_key_unset_logs_to_file(self, tmp_path):
+        """CRIT-1: skip() via OPENAI_API_KEY unset must log the skip reason."""
+        out = str(tmp_path / "r.json")
+        log_file = tmp_path / "llm_reviewer.log"
+        result = run_script(
+            ["--output", out, "--iteration", "1"],
+            env_overrides={"TLMFORGE_ENABLE_OPENAI": "1", "TLMFORGE_LLM_LOG": str(log_file)},
+        )
+        assert result.returncode == 2
+        assert log_file.exists(), "skip() must write to log when API key is absent"
+
+    # CRIT-2: final _write_atomic failure must fall back to skipped + exit 2
+    def test_write_failure_falls_back_to_exit2_and_logs(self, tmp_path, monkeypatch):
+        """CRIT-2: if final _write_atomic raises, fall back to skipped + exit 2 + log."""
+        out = str(tmp_path / "r.json")
+        log_file = tmp_path / "llm_reviewer.log"
+        monkeypatch.setenv("TLMFORGE_ENABLE_OPENAI", "1")
+        monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+        monkeypatch.setenv("TLMFORGE_LLM_LOG", str(log_file))
+
+        mock_resp = MagicMock()
+        mock_resp.incomplete_details = None
+        mock_resp.status = "completed"
+        mock_resp.output_text = json.dumps({
+            "reviewer": "openai", "schema_version": "1.0", "iteration": 1,
+            "status": "ok", "verdict": "approve", "findings": [],
+        })
+        mock_client = MagicMock()
+        mock_client.responses.create.return_value = mock_resp
+        mock_openai = MagicMock()
+        mock_openai.OpenAI.return_value = mock_client
+        mock_openai.APIError = Exception
+
+        import os as real_os
+        _calls = [0]
+
+        def selective_replace(src, dst):
+            _calls[0] += 1
+            if _calls[0] == 1:
+                raise OSError("disk full")
+            return real_os.replace(src, dst)
+
+        argv = [str(SCRIPT), "--output", out, "--iteration", "1", "--mode", "code"]
+        code = self._run_main(
+            mock_openai, argv,
+            extra_patches=[
+                patch("subprocess.check_output", return_value=b"diff content here"),
+                patch("os.replace", side_effect=selective_replace),
+            ],
+        )
+        assert code == 2
+        assert log_file.exists(), "write failure must be logged"
+        assert "atomic write failed" in log_file.read_text()
+
+    # HIGH-1: --iteration 0 must be rejected with exit 64 (Python layer)
+    def test_iteration_zero_exits_64(self, tmp_path):
+        """HIGH-1: --iteration 0 violates schema minimum:1 and must exit 64 (Python)."""
+        out = str(tmp_path / "r.json")
+        result = run_script(["--output", out, "--iteration", "0"])
+        assert result.returncode == 64
+
+    def test_shell_wrapper_iteration_zero_exits_64(self, tmp_path):
+        """HIGH-1: shell wrapper must also reject --iteration 0 with exit 64."""
+        import subprocess as sp
+        out = str(tmp_path / "r.json")
+        shell_script = SKILL_DIR / "ai_review_openai.sh"
+        result = sp.run(
+            ["bash", str(shell_script), "--output", out, "--iteration", "0"],
+            capture_output=True, text=True,
+        )
+        assert result.returncode == 64
+
+    # HIGH-2: invalid verdict enum must trigger skip after retries exhausted
+    def test_invalid_verdict_enum_both_retries_exits_2_skipped(self, tmp_path, monkeypatch):
+        """HIGH-2: verdict 'APPROVE' (uppercase) is not in enum → both retries invalid → skipped."""
+        out = str(tmp_path / "r.json")
+        monkeypatch.setenv("TLMFORGE_ENABLE_OPENAI", "1")
+        monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+
+        bad_resp = MagicMock()
+        bad_resp.incomplete_details = None
+        bad_resp.status = "completed"
+        bad_resp.output_text = json.dumps({
+            "reviewer": "openai", "schema_version": "1.0", "iteration": 1,
+            "status": "ok", "verdict": "APPROVE",  # uppercase — not in VALID_VERDICTS
+            "findings": [],
+        })
+        mock_client = MagicMock()
+        mock_client.responses.create.side_effect = [bad_resp, bad_resp]
+        mock_openai = MagicMock()
+        mock_openai.OpenAI.return_value = mock_client
+        mock_openai.APIError = Exception
+
+        argv = [str(SCRIPT), "--output", out, "--iteration", "1", "--mode", "code"]
+        code = self._run_main(
+            mock_openai, argv,
+            extra_patches=[patch("subprocess.check_output", return_value=b"diff content here")],
+        )
+        assert code == 2
+        data = load_json(out)
+        assert data["status"] == "skipped"
