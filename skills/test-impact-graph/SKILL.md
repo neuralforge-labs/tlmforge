@@ -47,13 +47,13 @@ and `--changed-files` and emits the impacted test list.
 
 ```bash
 $ python3 ~/.claude/skills/test-impact-graph/analyzer.py \
-    --src-root ~/memx/c1/memx/backend \
-    --tests-root ~/memx/c1/memx/backend/tests \
-    --changed-files backend/auth/token.py backend/encryption/crypto.py
+    --src-root ~/myproject/backend \
+    --tests-root ~/myproject/backend/tests \
+    --changed-files backend/auth/token.py backend/payments/billing.py
 
 backend/tests/test_auth_token.py
 backend/tests/test_login_flow.py
-backend/tests/test_encryption_lifecycle.py
+backend/tests/test_billing_lifecycle.py
 # 3 tests impacted (vs 487 in full suite — 162x reduction)
 ```
 

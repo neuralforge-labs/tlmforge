@@ -77,7 +77,7 @@ def build_reverse_dep_graph(
         imports = parse_imports(f)
         for imp in imports:
             # Check if imp is in our project (matches a module we know about)
-            # OR is a parent of one (e.g. import "memx.auth" matches "memx.auth.login")
+            # OR is a parent of one (e.g. import "myapp.auth" matches "myapp.auth.login")
             for known_mod in module_to_file:
                 if imp == known_mod or known_mod.startswith(imp + "."):
                     reverse[known_mod].add(f)

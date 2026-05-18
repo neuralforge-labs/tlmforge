@@ -1,8 +1,0 @@
-{
-  "reviewer": "phase-auditor",
-  "schema_version": "1.0",
-  "iteration": 3,
-  "status": "ok",
-  "verdict": "approve",
-  "findings": []
-}

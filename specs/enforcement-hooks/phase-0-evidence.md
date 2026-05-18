@@ -15,7 +15,7 @@ No enforcement behavior yet — all hooks are empty / no-op.
 {"type": "assistant", "message": {"role": "assistant", "content": [{"type": "tool_use", "name": "Skill", "input": {"skill": "tlmforge:feature-development"}}]}}
 ```
 Verified from live session transcript at:
-`~/.claude/projects/-home-neuralforge-labs-tlmforge/b76a3588-b0a4-42b3-aa39-62df34e713ea.jsonl`
+`~/.claude/projects/-home-user-tlmforge/b76a3588-b0a4-42b3-aa39-62df34e713ea.jsonl`
 
 **PreToolUse deny mechanism:** `sys.exit(2)` + message to stderr.
 Verified from `security_reminder_hook.py` line 273: `sys.exit(2)  # Block tool execution`.

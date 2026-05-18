@@ -1,7 +1,7 @@
 {
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "tlmforge",
-  "description": "Personal plugin marketplace — production-grade feature development discipline for Claude Code",
+  "description": "Production-grade feature development discipline for Claude Code",
   "owner": {
     "name": "neuralforge-labs"
   },

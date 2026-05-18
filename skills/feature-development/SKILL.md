@@ -449,12 +449,8 @@ didn't watch you write it. **Hard cap: 3 rounds.** If unresolved findings
 remain after round 3, escalate to the user — do NOT spin indefinitely.
 
 **Structured-output requirement:** Every reviewer emits a JSON sidecar
-(`<role>_review.json`) alongside the prose markdown report. The JSON validates
-against `~/.claude/skills/feature-development/review_schema.json`. The agent
-prompt addition (literal text to insert into every launch prompt) is in
-[`reviewer-convergence.md`](reviewer-convergence.md). Without it, the
-convergence script injects a synthetic `reviewer_json_missing` finding for
-that role.
+(`<role>_review.json`) alongside the prose markdown report. See the schema
+section below for the required JSON structure.
 
 **Model selection:** All Stage 3 reviewer subagents use `model="sonnet"`
 (no version pin). Opus is reserved for `red-team-reviewer` at Stage 5 only.
@@ -547,7 +543,7 @@ Overall verdict: approve / needs_revision / do_not_ship.
 
 Save BOTH:
 - agent_verification/round-1-<your-role>.md (prose)
-- agent_verification/round-1-<your-role>.json (per the JSON schema in reviewer-convergence.md)
+- agent_verification/round-1-<your-role>.json (JSON with verdict, findings list, and summary)
 
 [For tester ONLY] Also emit agent_verification/tester_edge_cases.json — the
 carryover artifact. Every CRITICAL/HIGH edge case you raise gets a corresponding
@@ -716,7 +712,7 @@ sections: commits-landed, tests-now-passing, anything-that-surprised-me.
 Stage 5's re-review reads this file to start cold without re-deriving
 context. The `git_sha` lets Stage 5 detect staleness — if HEAD has moved
 beyond that SHA, Stage 5 emits a loud warning but proceeds. See
-`reviewer-convergence.md` §5 for the state.md format.
+the state.md format is described in the "State handoff to Stage 5" note above.
 
 For each phase, produce **4 files** in `specs/<feature>/`:
 
@@ -1269,7 +1265,7 @@ roll it back.
 ### 6.1 Live e2e
 
 - Tests that hit a deployed environment, not mocks. Use a dedicated
-  test user (e.g. `encryption_test@memx.app`).
+  test user (e.g. `encryption_test@example.com`).
 - A canonical reproducibility script:
   ```
   scripts/<feature>/run_<feature>_lifecycle.sh
