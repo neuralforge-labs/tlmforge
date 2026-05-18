@@ -5,3 +5,10 @@ __pycache__/
 *.key
 *.tmp
 reports/
+
+# User-specific local config
+.claude/
+
+# Not for public repo
+marketing/
+test/
