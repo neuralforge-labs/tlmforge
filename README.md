@@ -63,14 +63,6 @@ Once restarted, invoke the skill on any task:
 /tlmforge:feature-development
 ```
 
-## Optional: Gemini cross-model diversity
-
-Set `GEMINI_API_KEY` in your environment to enable a 4th reviewer (Gemini) at Stage 5. If the key isn't set, the wrapper exits gracefully and the trio continues without it.
-
-```bash
-export GEMINI_API_KEY=your-key-here
-```
-
 ## Requirements
 
 - Claude Code (any recent version)
