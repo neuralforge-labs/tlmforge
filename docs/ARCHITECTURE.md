@@ -39,24 +39,15 @@
   │ User can say "go deeper" or "go lighter" to adjust at any point.   │
   └────────────────────────────────────────────────────────────────────┘
                               │
-    ┌─────────────────────────┼──────────────────────────┐
-    ▼                         ▼                          ▼
-╔══ LIGHT ════════╗  ╔══ MEDIUM ═══════════════════╗  ╔══ DEEP ══╗
-║ Main agent only ║  ║ Stage 1: spec audit (abbrev.)║  ║ Invoke   ║
-║ Zero subagent   ║  ║ Stage 2: fix plan            ║  ║ skill    ║
-║ spawns          ║  ║ Stage 3: 1-round review      ║  ║ Stages   ║
-║ (see flow       ║  ║   architect + tester         ║  ║ 1–7      ║
-║  below)         ║  ║ Stage 4: TDD + phase-end     ║  ╚══════════╝
-╚═════════════════╝  ║   code-reviewer +             ║       │
-         │           ║   phase-auditor               ║       ▼
-         │           ║ Stage 5: phase-auditor final  ║
-         │           ║ Stage 7: abbreviated STATUS   ║
-         │           ╚══════════════════════════════╝
-         │                        │
-         │                        │ (no further detail needed —
-         │                        │  all stages fit in the box)
-         │
-         │                                     ▼ (Deep stages below)
+            ┌─────────────────┼──────────────────┐
+            │                 │                  │
+            ▼                 ▼                  ▼
+         LIGHT             MEDIUM              DEEP
+     main agent        abbreviated          full 7-stage
+     only; zero          recipe             recipe
+     subagents        (see below)         (stages below)
+            │                                    │
+            │                                    ▼
             │      ┌────────────────────────────────────────────────────┐
             │      │ Stage 1: Feature request analysis (main only)       │
             │      │   Analyzes the user's FEATURE REQUEST (not a        │
@@ -184,8 +175,28 @@
             │      └────────────────────────────────────────────────────┘
             │
             ▼
-  ╔══════════════════════════════════════════════════════════════════╗
-  ║ Light/Minimal flow (main agent reviewer-in-one)                  ║
+  ╔══ MEDIUM FLOW (abbreviated) ════════════════════════════════════╗
+  ║                                                                  ║
+  ║  Stage 0: Classify → announce "Going Medium" → proceed          ║
+  ║  Stage 1: Abbreviated spec audit → specs/<f>/spec_audit.md      ║
+  ║           (same [GATE-BLOCKING] gate as Deep)                   ║
+  ║  Stage 2: Fix plan → specs/<f>/README.md                        ║
+  ║           (conditional gate only if unapproved decision)        ║
+  ║  Stage 3: Single-round review (parallel):                       ║
+  ║     • architect-reviewer    • tester                            ║
+  ║     Main fixes once if CRITICALs remain                         ║
+  ║  Stage 4: Phase execution — TDD (same discipline as Deep)       ║
+  ║     Phase-end: code-reviewer + phase-auditor                    ║
+  ║  Stage 5: phase-auditor final compliance check                  ║
+  ║  Stage 7: Abbreviated STATUS.md → specs/<f>/STATUS.md           ║
+  ║                                                                  ║
+  ║  Omitted vs Deep: threat-modeler, ux-reviewer, red-team,        ║
+  ║  Stage 6 live verification, 3-round loop at Stage 3             ║
+  ║                                                                  ║
+  ║  Mid-task escalation: security surface or >5 files → Deep       ║
+  ╚══════════════════════════════════════════════════════════════════╝
+
+  ╔══ LIGHT FLOW (main agent reviewer-in-one) ══════════════════════╗
   ║                                                                  ║
   ║  1. Identify scenarios + assign test layers                      ║
   ║     (unit always; +integration if crossing; +E2E if user-facing) ║
@@ -196,10 +207,10 @@
   ║      • TDD compliance per new function                           ║
   ║      • No commented-out / TODO / dead code                       ║
   ║      • No new secrets/auth/state outside scope                   ║
-  ║         → if yes: PAUSE + re-ask classification gate (Deep?)     ║
+  ║         → if yes: PAUSE + escalate to Medium or Deep             ║
   ║  6. Commit + push                                                ║
   ║                                                                  ║
-  ║  Mid-task escalation: scope expands → re-ask gate                ║
+  ║  Mid-task escalation: scope expands → escalate to Medium / Deep  ║
   ╚══════════════════════════════════════════════════════════════════╝
 ```
 
