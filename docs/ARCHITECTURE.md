@@ -39,15 +39,17 @@
   │ User can say "go deeper" or "go lighter" to adjust at any point.   │
   └────────────────────────────────────────────────────────────────────┘
                               │
-            ┌─────────────────┼──────────────────┐
-            │                 │                  │
-            ▼                 ▼                  ▼
-         LIGHT             MEDIUM              DEEP
-     main agent        abbreviated          full 7-stage
-     only; zero          recipe             recipe
-     subagents        (see below)         (stages below)
-            │                                    │
-            │                                    ▼
+                              ▼
+
+    DEEP   ─────────────────────────────────────────────► full 7-stage recipe
+      │                                                    (stages 1–7 below ↓)
+      │
+    MEDIUM ─────────────────────────────────────────────► abbreviated recipe
+      │                                                    (Medium flow below ↓)
+      │
+    LIGHT  ─────────────────────────────────────────────► main agent only
+                                                           (Light flow below ↓)
+
             │      ┌────────────────────────────────────────────────────┐
             │      │ Stage 1: Feature request analysis (main only)       │
             │      │   Analyzes the user's FEATURE REQUEST (not a        │
