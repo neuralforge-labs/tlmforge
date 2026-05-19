@@ -20,24 +20,43 @@
   │   • User language signals ("be quick" / "thorough" / "production")  │
   │   • Task ambiguity                                                  │
   │                                                                     │
-  │ Asymmetric default:                                                 │
-  │   both must agree Light → Light                                     │
-  │   either says Deep → Deep                                           │
+  │ Three paths — judge the WORK, not keywords or file paths:           │
   │                                                                     │
-  │ Clearly Light (skip the ask): "be quick" + single-file no-surface   │
-  │ Clearly Deep  (skip the ask): "thorough"/"production-grade"/        │
-  │                                explicit migration/schema/auth/PII   │
-  │ Else: AskUserQuestion(Light | Deep | Other)                         │
+  │   Light  — zero new logic, diff readable in 10 sec                  │
+  │             typo, rename, comment, config value                     │
+  │   Medium — fixes/improves existing behavior, no new product surface  │
+  │             bug fix, refactor, add missing tests, perf fix           │
+  │   Deep   — adds new capability or surface that didn't exist         │
+  │             new feature, new API, new data model, new UI screen     │
+  │                                                                     │
+  │ Core question: "Am I changing what exists, or adding something new?"│
+  │   Changing/fixing → Medium.  Adding something new → Deep.           │
+  │                                                                     │
+  │ Security-surface override → always Deep regardless of scope:        │
+  │   auth logic, secrets/credentials, PII access, crypto, sessions     │
+  │                                                                     │
+  │ Auto-classify + announce + proceed. No confirmation gate.           │
+  │ User can say "go deeper" or "go lighter" to adjust at any point.   │
   └────────────────────────────────────────────────────────────────────┘
                               │
-            ┌─────────────────┴────────────────┐
-            ▼                                   ▼
-  ╔═══ LIGHT/MINIMAL ══╗                ╔══════ DEEP ══════╗
-  ║  Main agent only   ║                ║ Invoke skill     ║
-  ║  ZERO subagent     ║                ║ Stages 1–7       ║
-  ║  spawns            ║                ╚══════════════════╝
-  ╚════════════════════╝                          │
-            │                                     ▼
+    ┌─────────────────────────┼──────────────────────────┐
+    ▼                         ▼                          ▼
+╔══ LIGHT ════════╗  ╔══ MEDIUM ═══════════════════╗  ╔══ DEEP ══╗
+║ Main agent only ║  ║ Stage 1: spec audit (abbrev.)║  ║ Invoke   ║
+║ Zero subagent   ║  ║ Stage 2: fix plan            ║  ║ skill    ║
+║ spawns          ║  ║ Stage 3: 1-round review      ║  ║ Stages   ║
+║ (see flow       ║  ║   architect + tester         ║  ║ 1–7      ║
+║  below)         ║  ║ Stage 4: TDD + phase-end     ║  ╚══════════╝
+╚═════════════════╝  ║   code-reviewer +             ║       │
+         │           ║   phase-auditor               ║       ▼
+         │           ║ Stage 5: phase-auditor final  ║
+         │           ║ Stage 7: abbreviated STATUS   ║
+         │           ╚══════════════════════════════╝
+         │                        │
+         │                        │ (no further detail needed —
+         │                        │  all stages fit in the box)
+         │
+         │                                     ▼ (Deep stages below)
             │      ┌────────────────────────────────────────────────────┐
             │      │ Stage 1: Feature request analysis (main only)       │
             │      │   Analyzes the user's FEATURE REQUEST (not a        │
@@ -203,9 +222,10 @@ Kept:
 
 | Path | Pre-0.5.0 | 0.5.x |
 |---|---|---|
-| Light/Minimal task | ~4 × N saves (Stop hooks fire on every code change) | **0** |
+| Light task | ~4 × N saves (Stop hooks fire on every code change) | **0 spawns, 0 OPUS** |
+| Medium feature, 5 phases | N/A (new path in 0.5.x) | **~13–15 spawns, 0 OPUS** |
 | Deep feature, 5 phases | ~145 spawns, ~31 OPUS | ~30–40 spawns, 1 OPUS |
-| Total opus invocations | ~31 | **1** (red-team at Stage 5) |
+| Total OPUS invocations | ~31 | **0 (Medium) / 1 (Deep — red-team at Stage 5)** |
 
 The single biggest win is removing the tester Stop hook (opus, on every save).
 Second biggest is bounding Stage 3 to 3 rounds with carry-forward findings
