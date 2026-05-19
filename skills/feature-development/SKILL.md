@@ -5,15 +5,11 @@ description: Use this skill for ALL implementation work beyond trivial one-liner
 
 # Feature Development — The Hands-Off Recipe
 
-This skill is the **operating manual** for building features the way the
-MemX CMEK encryption rollout went: every architectural choice captured
-before code was written, every phase reviewed by independent agents,
-every claim backed by reproducible evidence, every step reversible. By
-the end an external reviewer can audit the full trail and reach the
-same conclusion you did.
-
-The encryption story (`specs/encryption/`) is the **worked example** for
-this recipe — read it once if you've never done a feature this way.
+This skill is the **operating manual** for building features the right
+way: every architectural choice captured before code was written, every
+phase reviewed by independent agents, every claim backed by reproducible
+evidence, every step reversible. By the end an external reviewer can
+audit the full trail and reach the same conclusion you did.
 
 ---
 
@@ -195,8 +191,7 @@ explicitly tagged open questions and surfaced unknowns. The artifact
 filename `spec_audit.md` is forward-looking — the analysis IS the spec
 audit.
 
-This is the **single most valuable artifact**. The encryption README's
-F1-F16 audit is what made everything that followed solid.
+This is the **single most valuable artifact** in the whole recipe.
 
 **Read project learnings first.** Before writing the audit, check for
 `<project-root>/learnings.md` (a hybrid per-project log appended to by
@@ -250,7 +245,7 @@ why it's a non-issue for this feature:
 
 - (a) Security surface (auth, secrets, injection, IDOR, PII)
 - (b) Concurrency / race conditions / idempotency
-- (c) Failure modes under partial failure (network, KMS down, quota, timeout)
+- (c) Failure modes under partial failure (network, dependency down, quota, timeout)
 - (d) Cost impact (real numbers; flag guesses)
 - (e) Rollback safety / blast radius
 
@@ -388,11 +383,11 @@ are designed at the time they are created, not pre-allocated here.
 How to prove the feature works. Measurable, not subjective.
 ```
 
-**Phase numbering rules** (follow encryption's pattern):
-- Phase 0 = infrastructure / scaffolding (KMS keyring creation)
-- Phase 1 = pure crypto / pure logic (TDD-heavy, no integration)
+**Phase numbering rules:**
+- Phase 0 = infrastructure / scaffolding (config, schema, queue setup)
+- Phase 1 = pure logic (TDD-heavy, no integration)
 - Phase 2..N = integration into product surfaces, one surface per phase
-- Last phase(s) = irreversible cleanup (plaintext stripping, key destruction)
+- Last phase(s) = irreversible cleanup (data migration, flag removal)
 - Sub-phases (`5b`, `5c`, `5d`) get added LATER when post-rollout review
   finds gaps. Don't pre-allocate them.
 
@@ -1105,8 +1100,7 @@ phase N — <topic>`. Don't batch multiple phases into one commit.
 ### When a phase fails review or surfaces unknowns
 
 Add a sub-phase (`phase-Nb-<topic>.md`, `phase-Nc-...`) with the same
-4-file structure. The encryption work has 5b/5c/5d for exactly this
-reason: agents found gaps post-rollout, each gap got its own auditable
+4-file structure. Each gap found post-rollout gets its own auditable
 mini-phase. Do **NOT** silently rework the original phase doc — that
 destroys the audit trail.
 
@@ -1265,7 +1259,7 @@ roll it back.
 ### 6.1 Live e2e
 
 - Tests that hit a deployed environment, not mocks. Use a dedicated
-  test user (e.g. `encryption_test@example.com`).
+  test user (e.g. a dedicated test account).
 - A canonical reproducibility script:
   ```
   scripts/<feature>/run_<feature>_lifecycle.sh
@@ -1483,49 +1477,6 @@ scripts/<f>/                     Stage 6 — operator tooling
 
 ---
 
-## Worked example: encryption rollout
-
-Use `specs/encryption/` as the canonical reference. It has every
-artifact in this skill, and it shipped successfully through dev →
-staging → prod with arpit1712 in enforce mode. Specific files to study:
-
-**Caveat:** the encryption work predates this skill's artifact naming.
-In that project the spec audit was embedded inside README.md (lines
-9-100, the F1-F16 section), and there is no standalone `spec_audit.md`
-under `specs/encryption/`. Going forward, this skill requires
-`spec_audit.md` as a separate file — the embedded form was a
-historical convenience that loses the "audit before plan" gate.
-Everything else in the encryption directory matches the template.
-
-| Skill stage | Encryption artifact |
-|---|---|
-| Spec audit | `specs/encryption/README.md` lines 9-100 (F1-F16) — embedded, not separate |
-| Master plan | `specs/encryption/README.md` (full) |
-| Multi-agent review | `specs/encryption/agent_verification/SUMMARY.md` |
-| Phase 4 quartet | `phase-1-{crypto-core,verify,evidence,summary}.md` |
-| Sub-phase pattern | `phase-5d-{missed-writes,missed-reads,flake-triage,...}.md` |
-| Re-run review | `agent_verification/SUMMARY.md` "Re-run after fix" |
-| Live verification | `E2E_VERIFICATION.md` |
-| Rollout plan | `ROLLOUT_PLAN.md` |
-| Operator tooling | `scripts/encryption/README.md` |
-| STATUS.md | `specs/encryption/STATUS.md` |
-
-The story arc:
-1. User's original spec was good but had 16 gaps (F1-F16 in audit)
-2. Master plan answered the gaps; user approved
-3. 4 agents reviewed plan + early code; found 4 categories of real bugs
-4. Main agent fixed everything; re-running agents upgraded verdicts
-5. Live e2e against real KMS; lifecycle script committed
-6. Per-user rollout: shadow → enforce on test user → staging → prod
-7. Operator scripts let any future operator flip a user in either
-   direction with one command
-
-When you're tempted to skip a stage on YOUR feature, re-read this and
-ask: which stage of the encryption story would you have skipped, and
-which bug would have shipped to prod as a result?
-
----
-
 ## TDD — non-negotiable
 
 Repeats from `.claude/rules/tdd.md` because it's that important:
@@ -1559,8 +1510,8 @@ A test that passes before implementation is worthless.
 7. **Silent reworking of phase docs** — when a sub-phase is needed,
    make a new doc (`phase-5d-...`). Editing the original destroys
    the audit trail.
-8. **Removing safety nets first** — plaintext stripping, key destruction,
-   schema drops are LAST phases, after weeks of clean operation.
+8. **Removing safety nets first** — irreversible cleanups (schema drops,
+   data deletion, flag removal) are LAST phases, after weeks of clean operation.
 9. **Writing scripts/<feature>/X.py without README.md** — undiscoverable
    tools = no tools.
 10. **Letting STATUS.md go stale** — the executive dashboard is only
@@ -1658,9 +1609,8 @@ real bugs shipped from each one. Treat each as an explicit hardstop.
 
 **What happened:** The fix commit for an incident got architect review.
 Subsequent commits (rescue script, integration test, operator tooling)
-did not. A code-reviewer audit run AFTER push found a CRITICAL bug
-(`FeatureFlags()` no-arg call → TypeError on every full run) that would
-have been caught pre-push.
+did not. A code-reviewer audit run AFTER push found a CRITICAL crash
+bug that would have been caught pre-push.
 
 **Rule:** During an incident, every commit that adds NEW code (not just
 tweaks to the in-flight fix) requires its own pre-commit review pass.
@@ -1677,10 +1627,9 @@ commits. Each commit is its own review surface.
 
 **What happened:** An incident fix landed (5 paths). An audit found 5
 more (Incident 2). Both rounds were reviewed for bug correctness.
-Nobody re-reviewed against the ORIGINAL encryption spec. A round-3
-spec-drift review then surfaced 4 MORE bugs including a security
-violation (plaintext leak in `recurring_series.base_message`) and a
-silent zero-results bug (keyword search fallback not decrypted).
+Nobody re-reviewed against the ORIGINAL spec. A round-3 spec-drift
+review then surfaced additional bugs — including security violations
+and silent failures — that the incident fixes had missed.
 
 **Rule:** After ANY incident touching a previously-audited subsystem,
 schedule an explicit round-3 review against the original spec / threat
@@ -1715,13 +1664,12 @@ must:
 correlation with recent code changes, documented prior occurrence
 matching the same symptom.
 
-### LL-4. Background subsystems must be in scope for every encryption-touching change
+### LL-4. Background subsystems must be in scope for every sensitive-data-touching change
 
-**What happened:** Phase 5d encryption work tested the strip behavior
-in isolation. Background subsystems that consumed sensitive fields
-post-strip (embedding generation, PostHog analytics, recurring_series
-metadata, append-modify) were silently broken. Each was a separate
-"oh that path too" moment over multiple audits.
+**What happened:** A sensitive-data change was tested in isolation.
+Background subsystems that consumed the affected fields were silently
+broken. Each was a separate "oh that path too" moment over multiple
+audits.
 
 **Rule:** For ANY change to a sensitive-data hook (encryption, masking,
 redaction, etc.), the spec audit MUST enumerate:
@@ -1757,15 +1705,15 @@ flag-before-mutate, write-before-publish.
 
 **What happened:** A rescue script's helper functions had 17 unit tests.
 All passed. The script's `main()` was never exercised. A trivial wiring
-bug (`FeatureFlags()` instead of `FeatureFlags(db=...)`) would have
-crashed every full run with `TypeError`. Caught only by code-reviewer
-running source-grep AFTER the script was on main.
+bug (required constructor argument missing) would have crashed every
+full run with `TypeError`. Caught only by code-reviewer running
+source-grep AFTER the script was on main.
 
 **Rule:** Every script with a `main()` function gets at least one test
 that proves the entry point can construct its dependencies correctly.
 Either:
 - A unit test that imports `main` and inspects the source for known
-  required wiring (e.g. "must pass `db=` to FeatureFlags")
+  required wiring (e.g. "must pass `db=` to `Config`")
 - A unit test that calls `main()` with a fully-mocked external surface
   and asserts the expected sequence of dependency constructors fires
 - A smoke command (`--help` or `--inventory-only`) that validates
@@ -1856,15 +1804,13 @@ exactly when the gate is most important.
 ### LL-11. Test environment requires explicit env-var + state setup
 
 **What happened:** Multiple test runs failed because of environment
-mismatches: `KMS_NUM_BUCKETS` mismatch (default 1000 vs prod 100),
-`GEMINI_API_KEY` not fetched from secret manager. The failures looked
-like real bugs, wasted investigation time, masked actual issues.
+mismatches — env vars unset or defaulting to wrong values. The failures
+looked like real bugs, wasted investigation time, masked actual issues.
 
 **Rule:** Before running ANY integration test, verify:
-- All required env vars are set (KMS_NUM_BUCKETS, GEMINI_API_KEY,
-  GCP_PROJECT_ID, KMS_PROJECT, etc.)
-- Test user state matches expectations (encryption_mode, tier, opt-in flags)
-- Target environment is the intended one (--api-url=...)
+- All required env vars are set (check your project's env setup docs)
+- Test user / fixture state matches expectations
+- Target environment is the intended one (staging vs prod, --api-url=...)
 - Output goes to `.tmp/<name>.log` (per LL-7)
 
 If a test fails with a Python `KeyError` / `TypeError` / "0/N" / "None
@@ -1875,8 +1821,8 @@ production bug.
 
 **What happened:** Operator scripts (rescue, migrate, delete) were
 written rapidly during an incident with light review. A rescue script
-had a CRITICAL crash bug (`FeatureFlags()` no-arg). A migrate script's
-default `KMS_NUM_BUCKETS=1000` quietly corrupted detection logic.
+had a CRITICAL crash bug. Another script's wrong default value quietly
+corrupted detection logic.
 
 **Rule:** A script that touches prod data — even read-only — is a
 production-impact change. Apply the full skill discipline:
