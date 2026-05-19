@@ -11,12 +11,9 @@ from safe import fail_open
 MARKER_DIR = os.environ.get("TLMFORGE_MARKER_DIR") or os.path.expanduser("~/.cache/tlmforge")
 
 REMINDER = (
-    "Before responding, invoke `Skill(tlmforge:feature-development)`. "
-    "The skill's Stage 0 exits cleanly if this isn't a work request; "
-    "its classification gate is authoritative for Light vs Deep. "
-    "To bypass enforcement on this message, include `be quick`, `just do it`, "
-    "or `trivial fix` in your prompt. "
-    "(Bare \"minimal\" / \"trivial\" are NOT accepted — they appear too often in technical prose.)"
+    "Invoke Skill(tlmforge:feature-development) for non-trivial work. "
+    "Bypass: 'be quick' / 'just do it' / 'trivial fix'. "
+    "Skip if already invoked for current task."
 )
 
 
