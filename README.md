@@ -29,11 +29,17 @@ A Claude Code plugin that enforces production-grade feature development discipli
 | `tlmforge:golden-eval` | Drift detection: run a fixed task corpus against your Claude config, flag regressions |
 | `tlmforge:live-evaluator` | Fresh-context skeptical QA for Stage 6 live verification |
 
-**Agents (2)**
-| Agent | When it fires |
-|---|---|
-| `tlmforge:threat-modeler` | Stage 3 — attacks design assumptions before any code is written (trust boundaries, auth assumptions, PII flows) |
-| `tlmforge:red-team-reviewer` | Stage 5 tier-2 — single adversarial shot on finished code (IDOR, TOCTOU, timing attacks, prompt injection) |
+**Agents (8)**
+| Agent | Fires at | What it does |
+|---|---|---|
+| `tlmforge:architect-reviewer` | Stage 3 plan review + Stage 5 | Staff/Principal Engineer lens — architecture soundness, over-engineering, hallucinated APIs |
+| `tlmforge:threat-modeler` | Stage 3 plan review (Deep only) | Attacks design assumptions — trust boundaries, missing auth, PII flows — before any code is written |
+| `tlmforge:tester` | Stage 3 plan review + Stage 4 phase-end | QA — "what happens when" for every user action, timing condition, and failure mode |
+| `tlmforge:general-purpose` | Stage 3 plan review (Deep only) | Cross-cutting: cost, deployment feasibility, docs accuracy, ops readiness |
+| `tlmforge:code-reviewer` | Stage 4 phase-end | TDD enforcement, test quality, pattern consistency — reads full file context, not just the diff |
+| `tlmforge:phase-auditor` | Stage 4 phase-end + Stage 5 (Medium) | Verifies each phase delivered exactly what its spec promised — tests run, scope respected |
+| `tlmforge:ux-reviewer` | Stage 3 + Stage 4 phase-end (UI phases) | Layout, interaction patterns, accessibility, platform conventions |
+| `tlmforge:red-team-reviewer` | Stage 5 final audit (Deep only) | Adversarial: IDOR, TOCTOU races, injection, timing attacks, prompt injection |
 
 ## How it differs from superpowers
 
@@ -73,4 +79,4 @@ export GEMINI_API_KEY=your-key-here
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+Apache-2.0 — see [LICENSE](LICENSE).
