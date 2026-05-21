@@ -84,3 +84,11 @@ Disable for a session: `TLMFORGE_HOOKS=0`. Bypass for a single task: include `be
 ## License
 
 Apache-2.0 — see [LICENSE](LICENSE).
+
+---
+
+TLMForge is built by [Arpit Tripathi](https://www.linkedin.com/in/arpit-tripathi/).
+
+**Issues:** [github.com/neuralforge-labs/tlmforge/issues](https://github.com/neuralforge-labs/tlmforge/issues)
+
+Looking for a premium offering built on top of TLMForge? Sign up at [tlmforge.dev](https://tlmforge.dev/).
