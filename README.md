@@ -21,7 +21,8 @@ The hooks enforce the workflow mechanically — Claude cannot write or commit co
 ## Install
 
 ```bash
-claude plugin add github:neuralforge-labs/tlmforge
+claude plugin marketplace add neuralforge-labs/tlmforge
+claude plugin install tlmforge@neuralforge-labs
 ```
 
 **Restart Claude Code after install.** Plugin manifests are cached per session; a restart is required for the agents and hooks to take effect.
