@@ -1,22 +1,136 @@
 # tlmforge
 
-A Claude Code plugin that brings spec-driven discipline and adversarial multi-agent review to AI-assisted feature development.
+**The missing process layer for Claude Code.**
 
-## The problem
+Claude Code writes code fast. tlmforge makes sure it's *correct* — by enforcing a spec audit before any code is touched, running 8 independent agents against your plan and your output, and blocking commits that haven't cleared an adversarial red-team review.
 
-As your codebase grows, AI coding assistants produce more bugs — not because the model gets worse, but because there is no structure enforcing that a plan exists before code is written, that independent reviewers have checked the work, or that each phase is verified before the next begins. The result is fast output that slowly degrades in correctness.
+[![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+[![Version](https://img.shields.io/badge/version-0.5.15-brightgreen.svg)](.claude-plugin/plugin.json)
+[![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-orange.svg)](https://claude.ai/code)
+[![Python](https://img.shields.io/badge/python-3.9%2B-blue.svg)](https://python.org)
 
-tlmforge adds that structure. Every feature goes through a spec audit before any code is touched, independent agents review the plan and the output, and nothing ships until the review gate clears.
+---
 
-## How it works
+## The gap no other tool fills
 
-tlmforge auto-classifies every task into one of three intensity levels and announces its choice before starting:
+Every AI coding assistant optimizes for *velocity*. You type, it writes, the diff lands in seconds.
 
-- **Light** — trivial change (typo, rename, config tweak). Main agent handles it inline with TDD and self-review. Zero subagent spawns.
-- **Medium** — fix or refactor of existing behavior. Abbreviated spec audit → single-round architect + tester review → phase-gated TDD → phase-auditor sign-off.
-- **Deep** — new capability or surface. Full 7-stage recipe: spec audit → master plan → bounded multi-agent plan review → phase-gated TDD execution → adversarial red-team audit → live verification → operator tooling.
+None of them solve what actually causes production bugs: **no process**. There's nothing enforcing that:
 
-The hooks enforce the workflow mechanically — Claude cannot write or commit code until the appropriate skill stage has been completed for the current task.
+- A spec exists before a single line is written
+- An independent agent has reviewed the plan for logic holes
+- Tests were written before implementation, not after
+- Each phase was verified complete before the next started
+- A security-focused adversary looked for IDOR, injection, and auth bypasses
+
+tlmforge adds that process. Not as a suggestion — mechanically, via hooks. Claude literally cannot write or commit code until the appropriate workflow stage has been completed for the current task.
+
+---
+
+## How tlmforge compares
+
+| Capability | Claude Code (vanilla) | Aider | OpenHands | SWE-agent | tlmforge |
+|---|:---:|:---:|:---:|:---:|:---:|
+| Spec audit before any code | ✗ | ✗ | ✗ | ✗ | **✓** |
+| Auto task classification (Light / Medium / Deep) | ✗ | ✗ | ✗ | ✗ | **✓** |
+| Independent multi-agent plan review | ✗ | ✗ | Partial | ✗ | **✓** (3-round bounded) |
+| TDD enforcement — tests before impl | Best-effort | Best-effort | Best-effort | ✗ | **✓** (hooks block mutations) |
+| Phase-gated execution with verification artifacts | ✗ | ✗ | ✗ | ✗ | **✓** (4 artifacts/phase) |
+| Adversarial red-team audit | ✗ | ✗ | ✗ | ✗ | **✓** (Stage 5, Opus) |
+| Threat modeling at design time | ✗ | ✗ | ✗ | ✗ | **✓** (Stage 3) |
+| Calibrated: skips process for trivial tasks | N/A | ✗ | ✗ | ✗ | **✓** (bypass phrases) |
+| Works on any codebase, no hardcoded paths | ✓ | ✓ | ✓ | ✓ | **✓** |
+| Open source | ✓ | ✓ | ✓ | ✓ | **✓** |
+
+> Full comparison with rationale: [docs/COMPARISON.md](docs/COMPARISON.md)
+
+---
+
+## Three intensity levels — auto-classified
+
+tlmforge announces its choice before starting. You can say `"go deeper"` or `"go lighter"` at any point.
+
+**Light** — Zero new logic. Typo, rename, config tweak.
+→ Main agent handles inline with TDD and self-review. **Zero subagent spawns.**
+
+**Medium** — Fix or refactor of existing behavior. No new product surface.
+→ Abbreviated spec audit → single-round architect + tester review → phase-gated TDD → phase-auditor sign-off.
+
+**Deep** — New capability or surface that didn't exist before.
+→ Full 7-stage recipe (below).
+
+The classification is *semantic*, not keyword-based — the model judges the work, not a pattern matcher. Security surfaces (auth, crypto, PII, sessions) auto-escalate to Deep regardless of scope.
+
+---
+
+## The 7-stage Deep path
+
+```
+Stage 1  Feature request analysis → spec_audit.md
+         Hidden assumptions, threats, costs, rollback risks surfaced before planning.
+
+Stage 2  Master plan → specs/<feature>/README.md
+         Structured implementation plan. Gate fires only on unapproved decisions.
+
+Stage 3  Bounded 3-round plan review (parallel, cold)
+         architect-reviewer + tester + threat-modeler [+ ux-reviewer if UI]
+         Round 2+3: reviewers verify their own prior findings (no re-derivation).
+         Tester emits tester_edge_cases.json — becomes TDD seed at Stage 4.
+
+Stage 4  Phase-gated TDD execution
+         For each phase: tests first → RED → implement → GREEN → full regression suite.
+         Phase-end: code-reviewer + tester + phase-auditor [+ ux-reviewer if UI diff].
+         4 artifacts per phase: spec, verify, evidence, summary.
+
+Stage 5  Single-shot dual final audit (parallel, no iteration)
+         red-team-reviewer [Opus]    — IDOR, TOCTOU, injection, timing, prompt injection
+         architect-reviewer [Sonnet] — cross-phase holistic design review
+         CRITICALs → FINAL_ESCALATION.md → you decide.
+
+Stage 6  Live verification
+         Fresh-context QA agent runs against the deployed environment.
+
+Stage 7  STATUS.md executive dashboard + learnings.md
+```
+
+Nothing advances until the current stage clears. Escalation paths at every gate give you the choice: accept residual risk, extend rounds, revise, or abandon.
+
+---
+
+## 8 specialized agents
+
+Each agent has one job. Spawned automatically at the right stage — you never invoke them directly.
+
+| Agent | Stage | Job |
+|---|---|---|
+| `architect-reviewer` | 3, 5 | Architecture soundness, over-engineering, hallucinated APIs |
+| `threat-modeler` | 3 (Deep) | Trust boundaries, auth assumptions, PII flows — design time |
+| `tester` | 3, 4-end | Failure modes, edge cases, timing — emits TDD seed JSON at Stage 3 |
+| `general-purpose` | 3 (Deep) | Cost, deployment feasibility, docs accuracy, ops readiness |
+| `code-reviewer` | 4-end | TDD compliance, test quality, full-file context (not just diffs) |
+| `phase-auditor` | 4-end, 5 | Promise vs. delivered — did this phase do what its spec said? |
+| `ux-reviewer` | 3, 4 (UI) | Layout, accessibility, interaction patterns, platform conventions |
+| `red-team-reviewer` | 5 (Deep) | IDOR, TOCTOU, injection, timing attacks, prompt injection |
+
+---
+
+## Token efficiency — not naïve multi-agent
+
+The obvious multi-agent approach burns through context: spawn a reviewer on every save, run opus everywhere, converge without a cap. That approach averages ~145 subagent spawns for a 5-phase feature, ~31 of them on Opus.
+
+tlmforge's lean architecture cuts that by 75–99%:
+
+| Path | Naïve approach | tlmforge 0.5.x |
+|---|---|---|
+| Light task | ~4 spawns × every save | **0 spawns, 0 Opus** |
+| Medium feature (5 phases) | N/A (path didn't exist) | **~13–15 spawns, 0 Opus** |
+| Deep feature (5 phases) | ~145 spawns, ~31 Opus | **~30–40 spawns, 1 Opus** |
+
+Opus is reserved for exactly one job: the adversarial red-team pass at Stage 5. Everything else runs on Sonnet.
+
+How: bounded review loops (3 rounds max, carry-forward findings), stop-hook removal (review at defined gates, not after every file write), and the Light path using zero subagents.
+
+---
 
 ## Install
 
@@ -25,55 +139,40 @@ claude plugin marketplace add neuralforge-labs/tlmforge
 claude plugin install tlmforge@neuralforge-labs
 ```
 
-**Restart Claude Code after install.** Plugin manifests are cached per session; a restart is required for the agents and hooks to take effect.
+**Restart Claude Code after install.** Plugin manifests are cached per session.
 
-Invoke on any task:
+Then just describe your task. The `UserPromptSubmit` hook reminds Claude to invoke the skill automatically. Or invoke directly:
 
 ```
 /tlmforge:feature-development
 ```
 
-Or just describe your task — the `UserPromptSubmit` hook reminds Claude to invoke the skill automatically.
+**Bypass for trivial work:** include `be quick`, `just do it`, or `trivial fix` in your prompt.  
+**Disable for a session:** `TLMFORGE_HOOKS=0`
+
+---
 
 ## What's included
 
-**Hooks** — auto-active after install, no configuration needed
+**3 enforcement hooks** — auto-active after install, no configuration needed
 
-| Hook | Trigger | Behaviour |
+| Hook | Trigger | Behavior |
 |---|---|---|
-| Skill reminder | Every user prompt | Reminds Claude to invoke the feature-development skill before starting work |
-| Mutation guard | Before Edit / Write / Bash | Advisory reminder if the skill was not invoked for the current task |
-| Post-Stage-5 gate | Before `git commit` / `git push` / `gh pr merge` | Blocks if HEAD has drifted past the SHA recorded in the final audit |
+| Skill reminder | Every user prompt | Reminds Claude to invoke feature-development before starting work |
+| Mutation gate | Before Edit / Write / Bash | Advisory reminder if skill wasn't invoked for current task |
+| Post-Stage-5 gate | Before `git commit` / `git push` / `gh pr merge` | Blocks if HEAD drifted past the final-audit SHA |
 
-Disable for a session: `TLMFORGE_HOOKS=0`. Bypass for a single task: include `be quick`, `just do it`, or `trivial fix` in your prompt.
-
-**Skills**
+**5 companion skills**
 
 | Skill | Purpose |
 |---|---|
-| `tlmforge:feature-development` | The core recipe — Light / Medium / Deep paths |
-| `tlmforge:property-test-generator` | Generates Hypothesis property tests from invariants |
-| `tlmforge:test-impact-graph` | AST-based reverse dependency graph — run only tests affected by your diff |
-| `tlmforge:golden-eval` | Drift detection against a fixed task corpus |
-| `tlmforge:live-evaluator` | Fresh-context QA for Stage 6 live verification |
+| `tlmforge:feature-development` | Core recipe — Light / Medium / Deep |
+| `tlmforge:property-test-generator` | Generates Hypothesis property tests from behavioral invariants |
+| `tlmforge:test-impact-graph` | AST reverse-dep graph — runs only tests affected by your diff |
+| `tlmforge:golden-eval` | Drift detection: run a fixed task corpus, flag regressions vs baseline |
+| `tlmforge:live-evaluator` | Fresh-context QA agent for Stage 6 live verification |
 
-**Agents** — spawned automatically by the skill at the right stage
-
-| Agent | Stage | Role |
-|---|---|---|
-| `tlmforge:architect-reviewer` | Stage 3 + Stage 5 | Architecture soundness, over-engineering, hallucinated APIs |
-| `tlmforge:threat-modeler` | Stage 3 (Deep) | Design-time adversarial review — trust boundaries, auth assumptions, PII flows |
-| `tlmforge:tester` | Stage 3 + Stage 4 phase-end | QA — failure modes, timing conditions, edge cases |
-| `tlmforge:general-purpose` | Stage 3 (Deep) | Cost, deployment feasibility, docs accuracy, ops readiness |
-| `tlmforge:code-reviewer` | Stage 4 phase-end | TDD enforcement, test quality, full-file context review |
-| `tlmforge:phase-auditor` | Stage 4 phase-end + Stage 5 (Medium) | Verifies each phase delivered what its spec promised |
-| `tlmforge:ux-reviewer` | Stage 3 + Stage 4 (UI phases) | Layout, accessibility, interaction patterns |
-| `tlmforge:red-team-reviewer` | Stage 5 (Deep) | IDOR, TOCTOU, injection, timing attacks, prompt injection |
-
-## Learn more
-
-- **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** — flow diagram, classification gate, spawn-count comparison, escalation paths
-- **[skills/feature-development/SKILL.md](skills/feature-development/SKILL.md)** — the complete recipe with all stage instructions
+---
 
 ## Requirements
 
@@ -81,14 +180,23 @@ Disable for a session: `TLMFORGE_HOOKS=0`. Bypass for a single task: include `be
 - Python 3.9+
 - `pip install jsonschema pyyaml`
 
-## License
+---
 
-Apache-2.0 — see [LICENSE](LICENSE).
+## Learn more
+
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — full flow diagram, spawn-count analysis, escalation paths, carryover artifacts
+- [docs/COMPARISON.md](docs/COMPARISON.md) — tlmforge vs Aider, OpenHands, SWE-agent, vanilla Claude Code
+- [docs/PHILOSOPHY.md](docs/PHILOSOPHY.md) — why process discipline matters more as codebases grow
+- [CHANGELOG.md](CHANGELOG.md) — version history (0.2.0 → 0.5.x)
 
 ---
 
-TLMForge is built by [Arpit Tripathi](https://www.linkedin.com/in/arpit-tripathi/).
+## License
 
-**Issues:** [github.com/neuralforge-labs/tlmforge/issues](https://github.com/neuralforge-labs/tlmforge/issues)
+Apache-2.0 — [LICENSE](LICENSE). Copyright 2026 Neural Forge Technologies LLP.
 
-Looking for a premium offering built on top of TLMForge? Sign up at [tlmforge.dev](https://tlmforge.dev/).
+---
+
+Built by [Arpit Tripathi](https://www.linkedin.com/in/arpit-tripathi/).  
+**Issues / bugs:** [github.com/neuralforge-labs/tlmforge/issues](https://github.com/neuralforge-labs/tlmforge/issues)  
+**Premium offering:** [tlmforge.dev](https://tlmforge.dev/)
