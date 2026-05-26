@@ -20,18 +20,19 @@ All three agree on something important: *raw Claude Code without structure ships
 
 | Capability | superpowers | gstack | tlmforge |
 |---|:---:|:---:|:---:|
-| Structured methodology before code | ✓ (7-phase) | Partial (role prompts) | ✓ (spec audit + master plan) |
+| Structured methodology before code | ✓ (7-phase) | Partial (role-based skills) | ✓ (spec audit + master plan) |
 | Auto task classification by complexity | ✗ | ✗ | ✓ (Light / Medium / Deep) |
-| Truly independent cold-started reviewer agents | ✗ (reverted — see below) | ✗ (same model, role prompts) | ✓ (8 agents, distinct framing) |
-| Dedicated threat-modeler at design time | ✗ | ✗ | ✓ (Stage 3) |
-| Adversarial red-team review as final gate | ✗ | Partial (same-model framing) | ✓ (Stage 5, Opus) |
+| Spec audit / plan review by independent agent | ✗ (reverted to self-review — see below) | ✗ | ✓ (automatic, Stage 3) |
+| Cross-model independent review (on-demand) | ✗ | ✓ `/codex` uses OpenAI Codex CLI | ✓ (automatic gates) |
+| Dedicated threat-modeler at design time (before code) | ✗ | ✗ | ✓ (Stage 3) |
+| Security audit (OWASP / STRIDE) | ✗ | ✓ `/cso` (on-demand, not a gate) | ✓ (Stage 5, Opus red-team, automatic gate) |
 | Mechanical enforcement via hooks | ✗ | ✗ | ✓ (blocks mutations) |
 | SHA-anchored commit lock after final audit | ✗ | ✗ | ✓ |
 | Phase-gated execution with verification artifacts | ✗ | ✗ | ✓ (4 artifacts/phase) |
 | Bounded review loops with carry-forward findings | ✗ | ✗ | ✓ (3-round cap) |
 | TDD enforcement (hooks block code before tests) | ✓ (process-based) | ✗ | ✓ (mechanical) |
 | Escape hatch for trivial work | ✗ | N/A | ✓ |
-| Works across multiple IDEs / AI tools | ✓ (v5+) | ✓ | Claude Code only |
+| Works across multiple IDEs / AI tools | ✓ (v5+) | ✓ (10 agents) | Claude Code only |
 
 ---
 
@@ -70,22 +71,28 @@ Note: superpowers' task-level implementation review (in the Subagent-Driven Deve
 
 ## tlmforge vs. garrytan/gstack
 
-gstack is Garry Tan's personal Claude Code configuration, open-sourced. Its core insight: give Claude a role, and it performs better within that role. The 23 skills simulate a team: CEO, Designer, Staff Engineer, QA Lead, Release Manager, Doc Engineer. It's a productivity tool, and the 89K stars reflect its real-world utility.
+gstack is Garry Tan's personal Claude Code configuration, open-sourced. It's grown substantially from its original "23 specialists and 8 power tools" framing — the current [docs/skills.md](https://github.com/garrytan/gstack/blob/main/docs/skills.md) lists 35+ skills across roles: CEO, Designer, Staff Engineer, QA Lead, Release Manager, Doc Engineer, Chief Security Officer, and more. It also supports 10 AI coding agents beyond Claude Code. The 89K stars reflect its real-world utility for founders and solo developers.
 
-**The fundamental difference is what "multi-agent" means.**
+**What gstack actually has for review and security:**
 
-gstack uses role-based *prompts* — different instructions given to the same model within the same session. The "adversarial review" skill tells Claude to "think like an attacker and a chaos engineer." That's a useful framing. But it's the same model, with the same in-context knowledge of the implementation it's reviewing.
+- **`/review`** — Staff Engineer code review, run against the diff. Same Claude session.
+- **`/codex`** — Spawns OpenAI Codex CLI for independent cross-model review. Three modes: code review (pass/fail gate), adversarial challenge ("tries to break your code"), and open consultation. Source: [`codex/SKILL.md`](https://github.com/garrytan/gstack/blob/main/codex/SKILL.md) describes it as "the '200 IQ autistic developer' second opinion."
+- **`/cso`** — Chief Security Officer mode: OWASP Top 10 + STRIDE threat modeling + secrets archaeology + dependency supply chain + CI/CD + LLM/AI security. Two audit modes (daily: 8/10 confidence gate; comprehensive: monthly deep scan). Trend tracking across runs. Source: [`cso/SKILL.md`](https://github.com/garrytan/gstack/blob/main/cso/SKILL.md).
 
-tlmforge's reviewer agents are cold-started with no implementation context — they only see what they're given to review. The threat-modeler doesn't know how the feature will be built; it attacks the design. The red-team-reviewer doesn't know what shortcuts the implementation agent made; it finds the holes. That independence is the mechanism by which agents catch things the implementation agent rationalized away.
+These are real capabilities. `/codex` in particular is genuinely independent cross-model review — not "same model with a different hat."
 
-**Other differences:**
-- gstack has no phase gates. There's no mechanism enforcing that each phase was verified before the next started.
-- gstack has no verification artifacts. No `phase-N-evidence.md`, no `tester_edge_cases.json`, no `final_audit_red-team.json`. The work happens but nothing proves it happened.
-- gstack has no mechanical TDD enforcement. It's a role framing, not a hook that blocks mutations.
-- gstack has no SHA-anchored commit lock.
-- gstack's adversarial review is one agent with an adversarial framing; tlmforge's Stage 5 uses Opus in a cold-started session specifically hunting IDOR, TOCTOU, injection, timing attacks, and prompt injection.
+**What gstack doesn't have that tlmforge does:**
 
-**Honest summary:** gstack is an excellent velocity tool — it makes Claude Code faster and more structured for solo developers and founders. If you're shipping fast and willing to catch bugs post-ship, gstack is well-designed for that pace. tlmforge is designed for the opposite tradeoff: slower up front, correct at the end. For production codebases where bugs have real costs, the verification gates matter.
+All three of those review skills — `/review`, `/codex`, `/cso` — are **user-invoked, on-demand**. None of them are automatic gates. You can ship code without ever running them. They're powerful tools that require you to remember to use them.
+
+- No spec audit before code. gstack's `/office-hours` and `/plan-ceo-review` are excellent product-thinking tools, but they don't produce a structured spec audit that gates Stage 2. You can skip straight to implementation.
+- No phase gates. No mechanism enforces that Phase N was verified before Phase N+1.
+- No verification artifacts. No `phase-N-evidence.md`, no `tester_edge_cases.json`, no `final_audit_red-team.json` — nothing proves a gate was passed.
+- No mechanical TDD enforcement. No hook that blocks file mutations before tests exist.
+- No SHA-anchored commit lock. Nothing blocks commits that drift past the last review.
+- `/cso` and `/codex` are post-implementation, not design-time. There's no threat-modeler that attacks the plan before any code is written.
+
+**Honest summary:** gstack is a genuinely capable productivity toolkit with real cross-model review (`/codex`) and structured security auditing (`/cso`). It's designed for founders who want maximum velocity with good-enough review discipline. tlmforge is designed for codebases where "good-enough" isn't acceptable — where you need automatic gates that fire on every feature, not tools that require you to remember to invoke them.
 
 ---
 

@@ -17,7 +17,7 @@ Two excellent tools already tried to solve this problem:
 
 **[obra/superpowers](https://github.com/obra/superpowers)** (174K stars) built a rigorous 7-phase TDD-first methodology. They also built a bounded multi-round plan review loop — and removed it in v5.0.6. Their [release notes](https://github.com/obra/superpowers/blob/main/RELEASE-NOTES.md) state: *"The subagent review loop doubled execution time (~25 min overhead) without measurably improving plan quality. Regression testing across 5 versions, 5 trials each, showed identical quality scores."* They replaced it with inline self-review checklists.
 
-**[garrytan/gstack](https://github.com/garrytan/gstack)** (89K stars) went a different direction: 23 role-based slash commands simulating a team (CEO, Staff Engineer, QA Lead, etc.). Genuinely useful for velocity. The "adversarial review" skill tells Claude to think like an attacker — but it's the same model, same session, same in-context knowledge of the implementation it's reviewing. Not independent agents.
+**[garrytan/gstack](https://github.com/garrytan/gstack)** (89K stars) took a different approach: 35+ role-based slash commands (CEO, Staff Engineer, QA Lead, `/cso` for OWASP+STRIDE security audit, `/codex` for independent cross-model review via OpenAI Codex CLI — source: [codex/SKILL.md](https://github.com/garrytan/gstack/blob/main/codex/SKILL.md), [cso/SKILL.md](https://github.com/garrytan/gstack/blob/main/cso/SKILL.md)). Genuinely capable. The core limitation: every review skill is on-demand and user-invoked. Nothing automatically gates your commit. You can skip straight to implementation without a spec and ship without ever running `/cso`.
 
 **What neither solves: independent multi-agent plan review that's efficient enough to actually use on every feature.**
 
@@ -29,11 +29,12 @@ tlmforge's answer: the efficiency problem is solvable. The 25-min overhead came 
 
 | Capability | Claude Code (vanilla) | superpowers | gstack | tlmforge |
 |---|:---:|:---:|:---:|:---:|
-| Structured methodology before code | ✗ | ✓ (7-phase) | Partial | ✓ (spec audit + plan) |
+| Structured methodology before code | ✗ | ✓ (7-phase) | Partial (role skills) | ✓ (spec audit + plan) |
 | Auto task classification by complexity | ✗ | ✗ | ✗ | **✓** (Light/Medium/Deep) |
-| Truly independent cold-started reviewers | ✗ | ✗ (reverted to self-review) | ✗ (same model) | **✓** (8 agents) |
-| Dedicated threat-modeler at design time | ✗ | ✗ | ✗ | **✓** (Stage 3) |
-| Adversarial red-team as final gate | ✗ | ✗ | Partial (same-model framing) | **✓** (Stage 5, Opus) |
+| Automatic spec/plan review by independent agent | ✗ | ✗ (reverted to self-review) | ✗ | **✓** (Stage 3, every feature) |
+| Cross-model independent review | ✗ | ✗ | ✓ `/codex` (on-demand) | **✓** (automatic gate) |
+| Dedicated threat-modeler at design time (before code) | ✗ | ✗ | ✗ | **✓** (Stage 3) |
+| Structured security audit (OWASP / STRIDE) | ✗ | ✗ | ✓ `/cso` (on-demand, no gate) | **✓** (Stage 5 Opus, automatic gate) |
 | Mechanical TDD enforcement via hooks | ✗ | Process-based | ✗ | **✓** (blocks mutations) |
 | Phase-gated execution + verification artifacts | ✗ | ✗ | ✗ | **✓** (4 artifacts/phase) |
 | SHA-anchored commit lock after final audit | ✗ | ✗ | ✗ | **✓** |
