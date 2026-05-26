@@ -39,25 +39,32 @@ All three agree on something important: *raw Claude Code without structure ships
 
 Superpowers is the most directly comparable tool. Jesse Vincent arrived at a similar conclusion — AI coding needs process — and built a rigorous 7-phase methodology: Brainstorm → Worktree → Plan → Execute → TDD → Review → Complete. It's excellent work, and the 174K stars reflect it.
 
-**The key difference is what happened when superpowers tried multi-agent review.**
+**The key difference is what happened when superpowers tried multi-agent plan review.**
 
-Superpowers originally dispatched fresh reviewer subagents per task with a two-stage review (spec compliance + code quality). The approach worked in theory but hit a hard wall in practice: the review loop doubled execution time without measurably improving plan quality. Superpowers' own team replaced it with inline self-review checklists.
+Superpowers originally had a bounded multi-round review loop for specs and plans — a fresh subagent reviewing the brainstorm output and the written plan, with up to 5 iterations (later reduced to 3). In v5.0.6 they abandoned it entirely and replaced it with inline self-review checklists. Their own release note states:
 
-**tlmforge was built to solve exactly that problem.** The lean review architecture exists because the naive multi-agent approach (spawn a reviewer on every save, run Opus everywhere, converge without a cap) is genuinely too expensive. The solution isn't to abandon independent review — it's to make it efficient:
+> *"The subagent review loop (dispatching a fresh agent to review plans/specs) doubled execution time (~25 min overhead) without measurably improving plan quality. Regression testing across 5 versions with 5 trials each showed identical quality scores regardless of whether the review loop ran."*
+> — [superpowers v5.0.6 release notes](https://github.com/obra/superpowers/blob/main/RELEASE-NOTES.md)
 
-- **Bounded 3-round loops with carry-forward findings** — reviewers in rounds 2 and 3 verify their own prior findings instead of re-deriving from scratch. No finding drift. Dramatically fewer tokens.
-- **Light path uses zero subagent spawns** — the main agent owns review for trivial tasks. No overhead for work that doesn't need it.
-- **Sonnet for all review agents, Opus only at Stage 5** — the adversarial red-team is the one place where Opus's reasoning depth pays off. Everywhere else, Sonnet is sufficient.
-- **Result**: 0 spawns (Light), ~13–15 spawns (Medium), ~30–40 spawns (Deep) vs. superpowers' previous approach that doubled time.
+The result: "Self-review catches 3-5 real bugs per run in ~30s instead of ~25 min, with comparable defect rates."
 
-**Other differences:**
-- tlmforge's reviewer agents are cold-started with specific adversarial framings. They don't share context with the implementation agent. superpowers' inline self-review uses the same session.
-- tlmforge has a dedicated threat-modeler agent that runs at Stage 3 (design time), before any code exists. superpowers doesn't have this.
-- tlmforge's SHA-anchored commit lock prevents shipping work that drifted past the final audit. superpowers has no equivalent gate.
-- tlmforge's carryover artifacts (tester_edge_cases.json from Stage 3 seeding Stage 4 TDD) create explicit continuity between review and implementation. superpowers doesn't carry findings forward as structured data.
-- superpowers supports Claude Code, Cursor, Gemini CLI, GitHub Copilot CLI — tlmforge is Claude Code only.
+Note: superpowers' task-level implementation review (in the Subagent-Driven Development skill) still uses fresh review subagents — spec compliance then code quality, per task. What was abandoned was specifically the plan/spec review loop — the equivalent of tlmforge's Stage 3.
 
-**Honest summary:** If you want a broad IDE-agnostic skills framework with a proven 7-phase methodology and a large ecosystem, superpowers is the right choice. If you want genuinely independent multi-agent review that's efficient enough to actually use — with mechanical enforcement, a commit lock, and an adversarial final gate — tlmforge is built for that.
+**tlmforge takes the opposite approach to the same efficiency problem.** Rather than replace independent plan review with self-review, tlmforge redesigned the review loop to make independent review efficient:
+
+- **Bounded 3-round loops with carry-forward findings** — reviewers in rounds 2 and 3 verify their own prior findings instead of re-deriving from scratch. This eliminates the token waste that drove superpowers' 25-min overhead.
+- **Light path uses zero subagent spawns** — trivial tasks have no review overhead at all.
+- **Sonnet for all review agents, Opus only at Stage 5** — the adversarial red-team pass is the one place where Opus's reasoning depth pays off.
+- **Result**: ~30–40 spawns for a 5-phase Deep feature, vs. the ~145 that the naïve approach requires.
+
+**Other structural differences:**
+- tlmforge has a dedicated **threat-modeler** agent that reviews the design at Stage 3 before any code exists. superpowers has no equivalent.
+- tlmforge's **SHA-anchored commit lock** blocks commits that drift past the final audit SHA. superpowers has no equivalent gate.
+- tlmforge's **tester_edge_cases.json** carries reviewer findings forward from Stage 3 into Stage 4 as a TDD seed. superpowers doesn't carry findings forward as structured artifacts.
+- tlmforge's **red-team-reviewer** (Opus, cold-started) runs as the final gate specifically hunting IDOR, TOCTOU, injection, and timing attacks. superpowers has no equivalent final adversarial pass.
+- superpowers supports Claude Code, Cursor, Gemini CLI, GitHub Copilot CLI, Codex — tlmforge is Claude Code only.
+
+**Honest summary:** If you want a battle-tested, IDE-agnostic skills framework with a large ecosystem and proven task-level multi-agent execution, superpowers is the right choice. If you want independent multi-agent *plan review* kept in the loop (rather than replaced with self-review) — with a threat-modeler, an adversarial final gate, and a SHA commit lock — that's what tlmforge provides.
 
 ---
 

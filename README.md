@@ -15,13 +15,13 @@ Claude Code writes code fast. tlmforge makes sure it's *correct* — by enforcin
 
 Two excellent tools already tried to solve this problem:
 
-**[obra/superpowers](https://github.com/obra/superpowers)** (174K stars) built a rigorous 7-phase TDD-first methodology. They also tried independent multi-agent review — and abandoned it. Their own tests showed the review loop doubled execution time without measurably improving quality, so they replaced it with inline self-review.
+**[obra/superpowers](https://github.com/obra/superpowers)** (174K stars) built a rigorous 7-phase TDD-first methodology. They also built a bounded multi-round plan review loop — and removed it in v5.0.6. Their [release notes](https://github.com/obra/superpowers/blob/main/RELEASE-NOTES.md) state: *"The subagent review loop doubled execution time (~25 min overhead) without measurably improving plan quality. Regression testing across 5 versions, 5 trials each, showed identical quality scores."* They replaced it with inline self-review checklists.
 
-**[garrytan/gstack](https://github.com/garrytan/gstack)** (89K stars) went a different direction: 23 role-based slash commands simulating a team (CEO, Staff Engineer, QA Lead, etc.). Genuinely useful for velocity. But it's the same model with different framing, not independent review — the "adversarial" pass still shares the implementation agent's context.
+**[garrytan/gstack](https://github.com/garrytan/gstack)** (89K stars) went a different direction: 23 role-based slash commands simulating a team (CEO, Staff Engineer, QA Lead, etc.). Genuinely useful for velocity. The "adversarial review" skill tells Claude to think like an attacker — but it's the same model, same session, same in-context knowledge of the implementation it's reviewing. Not independent agents.
 
-**What neither solves: genuine multi-agent independent review that's efficient enough to actually use.**
+**What neither solves: independent multi-agent plan review that's efficient enough to actually use on every feature.**
 
-tlmforge's answer: the efficiency problem is solvable. Reviewer agents in rounds 2 and 3 *verify their own prior findings* instead of re-deriving from scratch. No finding drift. Bounded loops. Sonnet for review, Opus only for the final adversarial pass. The result is cold-started independent agents that actually run on every feature — not just the ones that feel important enough.
+tlmforge's answer: the efficiency problem is solvable. The 25-min overhead came from re-derivation — reviewers re-reading the whole plan from scratch each round. tlmforge's rounds 2 and 3 *verify prior findings* instead of re-deriving. Bounded 3-round cap. Sonnet for reviewers, Opus only for the final adversarial pass. Result: independent cold-started plan review that actually runs on every non-trivial feature.
 
 ---
 
