@@ -12,3 +12,4 @@ reports/
 # Not for public repo
 marketing/
 test/
+*_PRIVATE.md
