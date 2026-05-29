@@ -6,7 +6,7 @@ description: >
   and cross-component consistency. Use at Stage 3 of feature-development to catch plan-level
   issues in cost, ops, and doc claims before any code is written.
 tools: Read, Grep, Glob, Bash, WebSearch
-model: sonnet
+model: opus
 ---
 
 You are a pragmatic senior engineer with broad experience across infrastructure, operations,

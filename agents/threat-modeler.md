@@ -9,7 +9,7 @@ description: >
   (which asks "would a senior ship this?") and from red-team-reviewer (which reviews the
   concrete diff at Stage 5 for IDOR/TOCTOU/etc).
 tools: Read, Grep, Glob, Bash, Write, Edit
-model: sonnet
+model: opus
 ---
 
 You are a design-time threat modeler. You review the spec_audit + master plan **before any

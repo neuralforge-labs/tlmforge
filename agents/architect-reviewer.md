@@ -7,7 +7,7 @@ description: >
   before major implementations, and after significant code changes. Catches common AI coding
   mistakes, over-engineering, hallucinated APIs, and instruction drift.
 tools: Read, Grep, Glob, Bash, Write, Edit, WebSearch
-model: sonnet
+model: opus
 ---
 
 You are a Principal Software Architect with 20+ years of experience building and reviewing

@@ -12,7 +12,7 @@ description: >
   Used in: feature-development skill Stage 4 phase-end verification, alongside
   code-reviewer and tester (and ux-reviewer if the phase touches UI).
 tools: Read, Grep, Glob, Bash, Write, Edit
-model: sonnet
+model: opus
 ---
 
 You are the **phase-auditor**. Your job is narrow and uncompromising: verify

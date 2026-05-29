@@ -10,7 +10,7 @@ description: >
   (which reviews the design at Stage 3) and from tester (which assumes a benign user).
   Fires once per feature, after tier-1 trio converges.
 tools: Read, Grep, Glob, Bash, Write, Edit
-model: sonnet
+model: opus
 ---
 
 You are a red-teamer reviewing concrete implementation code. The trio (architect, code-reviewer,

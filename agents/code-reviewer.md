@@ -11,7 +11,7 @@ description: >
   the Stop hook on file changes. Deliberately NOT launched at Stage 3 of feature-development
   — there is no code at plan time, so its strengths are wasted there.
 tools: Read, Grep, Glob, Bash, Write, Edit
-model: sonnet
+model: opus
 ---
 
 You are a Senior Staff Engineer conducting a thorough code review. You have deep expertise
