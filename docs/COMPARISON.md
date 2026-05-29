@@ -55,7 +55,7 @@ Note: superpowers' task-level implementation review (in the Subagent-Driven Deve
 
 - **Bounded 3-round loops with carry-forward findings** — reviewers in rounds 2 and 3 verify their own prior findings instead of re-deriving from scratch. This eliminates the token waste that drove superpowers' 25-min overhead.
 - **Light path uses zero subagent spawns** — trivial tasks have no review overhead at all.
-- **Sonnet for all review agents, Opus only at Stage 5** — the adversarial red-team pass is the one place where Opus's reasoning depth pays off.
+- **All review agents run on Opus** — every review stage gets the model's full reasoning depth, not a cheaper tier. The efficiency gain comes from spawn-count discipline, not model downgrading.
 - **Result**: ~30–40 spawns for a 5-phase Deep feature, vs. the ~145 that the naïve approach requires.
 
 **Other structural differences:**

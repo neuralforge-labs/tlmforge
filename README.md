@@ -5,7 +5,7 @@
 Claude Code writes code fast. tlmforge makes sure it's *correct* — by enforcing a spec audit before any code is touched, running 8 independent agents against your plan and your output, and blocking commits that haven't cleared an adversarial red-team review.
 
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.5.15-brightgreen.svg)](.claude-plugin/plugin.json)
+[![Version](https://img.shields.io/badge/version-0.5.16-brightgreen.svg)](.claude-plugin/plugin.json)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-orange.svg)](https://claude.ai/code)
 [![Python](https://img.shields.io/badge/python-3.9%2B-blue.svg)](https://python.org)
 
@@ -21,7 +21,7 @@ Two excellent tools already tried to solve this problem:
 
 **What neither solves: independent multi-agent plan review that's efficient enough to actually use on every feature.**
 
-tlmforge's answer: the efficiency problem is solvable. The 25-min overhead came from re-derivation — reviewers re-reading the whole plan from scratch each round. tlmforge's rounds 2 and 3 *verify prior findings* instead of re-deriving. Bounded 3-round cap. Sonnet for reviewers, Opus only for the final adversarial pass. Result: independent cold-started plan review that actually runs on every non-trivial feature.
+tlmforge's answer: the efficiency problem is solvable. The 25-min overhead came from re-derivation — reviewers re-reading the whole plan from scratch each round. tlmforge's rounds 2 and 3 *verify prior findings* instead of re-deriving. Bounded 3-round cap. All agents run on Opus. Result: independent cold-started plan review that actually runs on every non-trivial feature.
 
 ---
 
@@ -83,7 +83,7 @@ Stage 4  Phase-gated TDD execution
 
 Stage 5  Single-shot dual final audit (parallel, no iteration)
          red-team-reviewer [Opus]    — IDOR, TOCTOU, injection, timing, prompt injection
-         architect-reviewer [Sonnet] — cross-phase holistic design review
+         architect-reviewer [Opus]   — cross-phase holistic design review
          CRITICALs → FINAL_ESCALATION.md → you decide.
 
 Stage 6  Live verification
@@ -113,17 +113,17 @@ Each agent has one job. Spawned automatically at the right stage — you never i
 
 ---
 
-## Token efficiency — why the review actually runs
+## Spawn efficiency — why the review actually runs
 
-The naïve multi-agent approach (spawn reviewers on every save, Opus everywhere, unbounded convergence) hits ~145 subagent spawns for a 5-phase feature, ~31 of them on Opus. superpowers ran that experiment and abandoned multi-agent review because it doubled execution time. tlmforge solved the efficiency problem differently:
+The naïve multi-agent approach (spawn reviewers on every save, unbounded convergence) hits ~145 subagent spawns for a 5-phase feature. superpowers ran that experiment and abandoned multi-agent review because it doubled execution time. tlmforge solved the efficiency problem differently:
 
 | Path | Naïve approach | tlmforge 0.5.x |
 |---|---|---|
-| Light task | ~4 spawns × every save | **0 spawns, 0 Opus** |
-| Medium feature (5 phases) | N/A | **~13–15 spawns, 0 Opus** |
-| Deep feature (5 phases) | ~145 spawns, ~31 Opus | **~30–40 spawns, 1 Opus** |
+| Light task | ~4 spawns × every save | **0 spawns** |
+| Medium feature (5 phases) | N/A | **~13–15 spawns, all Opus** |
+| Deep feature (5 phases) | ~145 spawns (mixed models) | **~30–40 spawns, all Opus** |
 
-**How:** Bounded 3-round loops where reviewers verify their *own prior findings* in rounds 2–3 instead of re-deriving from scratch. Review fires at defined gates (not on every save). Opus is reserved for exactly one job: the adversarial red-team pass at Stage 5 where its reasoning depth matters.
+**How:** Bounded 3-round loops where reviewers verify their *own prior findings* in rounds 2–3 instead of re-deriving from scratch. Review fires at defined gates (not on every save). Light path spawns nothing. Every spawn that does run uses Opus — the efficiency gain comes from spawn-count discipline, not model downgrading.
 
 ---
 

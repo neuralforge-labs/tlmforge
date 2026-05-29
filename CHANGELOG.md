@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5.16 (2026-05-29)
+
+### All agents upgraded to Opus
+
+Every review agent now runs on Claude Opus. Previously tester and red-team-reviewer used Opus; all others used Sonnet. Now architect-reviewer, threat-modeler, tester, general-purpose, code-reviewer, phase-auditor, ux-reviewer, and red-team-reviewer all run on Opus. The efficiency advantage (bounded 3-round loops, defined gates, 0 spawns for Light) comes from spawn-count discipline — not model downgrading.
+
+---
+
 ## 0.5.11 (2026-05-17)
 
 ### Two mandatory user-approval gates in feature-development skill
