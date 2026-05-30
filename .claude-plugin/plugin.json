@@ -1,7 +1,7 @@
 {
   "name": "tlmforge",
-  "description": "Production-grade feature development with Light / Medium / Deep intensity modes. Ships 8 agents (architect-reviewer, threat-modeler, tester, general-purpose, code-reviewer, phase-auditor, ux-reviewer, red-team-reviewer) and five companion skills.",
-  "version": "0.5.16",
+  "description": "Production-grade feature development with Light / Medium / Deep intensity modes. Ships 8 agents (architect-reviewer, threat-modeler, tester, general-purpose, code-reviewer, phase-auditor, ux-reviewer, red-team-reviewer) and six companion skills including generate-architecture.",
+  "version": "0.5.17",
   "author": {
     "name": "neuralforge-labs",
     "url": "https://github.com/neuralforge-labs"
